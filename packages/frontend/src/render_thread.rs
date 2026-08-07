@@ -32,8 +32,8 @@ use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 
 use crate::protocol::{
-    contact_offset, joint_offset, CameraMsg, RenderMsg, ResizeMsg, CONTACT_STRIDE, JOINT_STRIDE,
-    MAX_CONTACTS, POSE_HEADER, POSE_STRIDE,
+    contact_offset, inertia_offset, joint_offset, CameraMsg, RenderMsg, ResizeMsg, CONTACT_STRIDE,
+    JOINT_STRIDE, MAX_CONTACTS, POSE_HEADER, POSE_STRIDE,
 };
 
 /// The boxed RAF callback, self-referenced so the render loop can reschedule
@@ -99,6 +99,22 @@ struct SimLink {
     contacts: Option<ContactOverlay>,
     /// The joint-axis debug overlay, when it was built.
     joints: Option<JointOverlay>,
+    /// The inertia-box debug overlay, when it was built.
+    inertia: Option<InertiaOverlay>,
+}
+
+/// The inertia-box overlay: per body, the box that would have the same mass and
+/// inertia, drawn in the body's INERTIAL frame.
+///
+/// This is the overlay that shows what the solver actually sees. A limb whose
+/// visual mesh is slender but whose inertia box is fat is mis-specified, and
+/// nothing else in the picture reveals that.
+struct InertiaOverlay {
+    region: js_sys::Float32Array,
+    scratch: Vec<f32>,
+    /// `body_id → ` (transform, half-extents). `None` for a massless body,
+    /// which has no equivalent box — the world body most of all.
+    boxes: Vec<Option<(awsm_renderer::transforms::TransformKey, Vec3)>>,
 }
 
 /// The joint-axis overlay: one bar through each hinge or slide joint's world
@@ -176,6 +192,10 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
         .ok()
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let show_inertia = js_sys::Reflect::get(&payload, &JsValue::from_str("inertia"))
+        .ok()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let canvas_handle = canvas.clone();
     post_progress("render worker: requesting WebGPU device…");
     let gpu =
@@ -190,6 +210,7 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
             origin,
             show_contacts,
             show_joints,
+            show_inertia,
         )
         .await
         {
@@ -208,6 +229,7 @@ async fn run(
     origin: String,
     show_contacts: bool,
     show_joints: bool,
+    show_inertia: bool,
 ) -> Result<(), JsValue> {
     use awsm_renderer::camera::CameraParams;
     use awsm_renderer::AwsmRendererBuilder;
@@ -314,6 +336,7 @@ async fn run(
         canvas.clone(),
         show_contacts,
         show_joints,
+        show_inertia,
     )?;
     // Only now is the worker listening — main holds the model message until
     // this arrives.
@@ -387,6 +410,9 @@ fn apply_poses(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
     if let Some(overlay) = &mut m.joints {
         overlay.region.copy_to(&mut overlay.scratch[..]);
     }
+    if let Some(overlay) = &mut m.inertia {
+        overlay.region.copy_to(&mut overlay.scratch[..]);
+    }
     let seq1 = js_sys::Atomics::load(&m.header, 0).unwrap_or(-1);
     if seq0 != seq1 {
         return; // torn — writer was mid-publish
@@ -403,6 +429,57 @@ fn apply_poses(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
     if let Some(overlay) = &mut m.joints {
         overlay.apply(r);
     }
+    if let Some(overlay) = &mut m.inertia {
+        overlay.apply(r);
+    }
+}
+
+impl InertiaOverlay {
+    fn apply(&mut self, r: &mut awsm_renderer::AwsmRenderer) {
+        for (b, entry) in self.boxes.iter().enumerate() {
+            let Some((tk, half)) = entry else { continue };
+            let o = b * POSE_STRIDE;
+            let _ = r.transforms.set_local(
+                *tk,
+                awsm_renderer::transforms::Transform {
+                    translation: Vec3::new(
+                        self.scratch[o],
+                        self.scratch[o + 1],
+                        self.scratch[o + 2],
+                    ),
+                    // MuJoCo quaternions are [w, x, y, z]; glam's are [x, y, z, w].
+                    rotation: Quat::from_xyzw(
+                        self.scratch[o + 4],
+                        self.scratch[o + 5],
+                        self.scratch[o + 6],
+                        self.scratch[o + 3],
+                    ),
+                    // The mesh is a UNIT cube, so the scale IS the half-extents.
+                    scale: *half,
+                },
+            );
+        }
+    }
+}
+
+/// The half-extents of the box with mass `mass` and diagonal inertia `inertia`.
+///
+/// Inverting the box inertia formula: for half-extents (a, b, c),
+/// `Ixx = m/3 (b² + c²)` and cyclically, so `a² = 3/(2m) (Iyy + Izz - Ixx)`.
+/// A degenerate or inconsistent inertia (a shell, a point mass, a hand-authored
+/// tensor that is not physically realisable) can drive that negative, which is
+/// why it clamps at zero instead of taking a NaN square root.
+fn inertia_half_extents(mass: f64, inertia: [f64; 3]) -> Option<Vec3> {
+    if mass <= 0.0 {
+        return None;
+    }
+    let k = 3.0 / (2.0 * mass);
+    let half = |x: f64, y: f64, z: f64| (k * (y + z - x)).max(0.0).sqrt() as f32;
+    Some(Vec3::new(
+        half(inertia[0], inertia[1], inertia[2]),
+        half(inertia[1], inertia[2], inertia[0]),
+        half(inertia[2], inertia[0], inertia[1]),
+    ))
 }
 
 impl JointOverlay {
@@ -520,6 +597,7 @@ fn install_onmessage(
     canvas: web_sys::OffscreenCanvas,
     show_contacts: bool,
     show_joints: bool,
+    show_inertia: bool,
 ) -> Result<(), JsValue> {
     let scope = js_sys::global().unchecked_into::<web_sys::DedicatedWorkerGlobalScope>();
     let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
@@ -546,7 +624,14 @@ fn install_onmessage(
                 .clone()
                 .unwrap_or_else(|| instance.source.filename.clone());
             let mut r = cell.borrow_mut();
-            match link_sim(&mut r, instance, &data, show_contacts, show_joints) {
+            match link_sim(
+                &mut r,
+                instance,
+                &data,
+                show_contacts,
+                show_joints,
+                show_inertia,
+            ) {
                 Ok(m) => {
                     tracing::info!("render thread: driving {label} — {bound}/{total} geoms bound");
                     post_progress(&format!("sim linked ({bound}/{total} geoms) — running"));
@@ -595,6 +680,7 @@ fn link_sim(
     data: &JsValue,
     show_contacts: bool,
     show_joints: bool,
+    show_inertia: bool,
 ) -> Result<SimLink, JsValue> {
     let get = |key: &str| js_sys::Reflect::get(data, &JsValue::from_str(key));
     let ngeom = get("ngeom")?.as_f64().unwrap_or(0.0) as usize;
@@ -648,6 +734,23 @@ fn link_sim(
         },
         false => None,
     };
+    // The inertia region sits after the joint region, so its offset needs the
+    // joint count even when the joint overlay itself was not built.
+    let njnt = get("njnt")?.as_f64().unwrap_or(0.0) as usize;
+    let inertia = match show_inertia {
+        true => match instance
+            .root_transform
+            .ok_or_else(|| JsValue::from_str("the sim instance has no resolved root transform"))
+            .and_then(|root| build_inertia_overlay(r, data, &sab, ngeom, njnt, root))
+        {
+            Ok(o) => Some(o),
+            Err(err) => {
+                tracing::warn!("inertia overlay: {err:?} — continuing without it");
+                None
+            }
+        },
+        false => None,
+    };
     Ok(SimLink {
         instance,
         header,
@@ -656,6 +759,78 @@ fn link_sim(
         last_seq: 0,
         contacts,
         joints,
+        inertia,
+    })
+}
+
+/// Mint one translucent box per massive body, sized from its mass and inertia.
+fn build_inertia_overlay(
+    r: &mut awsm_renderer::AwsmRenderer,
+    data: &JsValue,
+    sab: &JsValue,
+    ngeom: usize,
+    njnt: usize,
+    root: awsm_renderer::transforms::TransformKey,
+) -> Result<InertiaOverlay, JsValue> {
+    let get = |key: &str| js_sys::Reflect::get(data, &JsValue::from_str(key));
+    let nbody = get("nbody")?.as_f64().unwrap_or(0.0) as usize;
+    let f64s = |key: &str| -> Vec<f64> {
+        get(key)
+            .ok()
+            .map(|v| v.unchecked_into::<js_sys::Float64Array>().to_vec())
+            .unwrap_or_default()
+    };
+    let body_mass = f64s("body_mass");
+    let body_inertia = f64s("body_inertia");
+
+    let mut pbr = awsm_renderer::materials::pbr::PbrMaterial::new(
+        // Translucent: a solid box per body would hide the robot it is
+        // describing, which defeats the whole point of the overlay.
+        awsm_renderer::materials::MaterialAlphaMode::Blend,
+        false,
+    );
+    pbr.base_color_factor = [0.2, 0.9, 0.3, 0.28];
+    pbr.metallic_factor = 0.0;
+    pbr.roughness_factor = 1.0;
+    let material = r.materials.insert(
+        awsm_renderer::materials::Material::Pbr(Box::new(pbr)),
+        &r.textures,
+        &r.dynamic_materials,
+        &r.extras_pool,
+    );
+
+    let mut boxes = Vec::with_capacity(nbody);
+    for b in 0..nbody {
+        let mass = body_mass.get(b).copied().unwrap_or(0.0);
+        let inertia = [
+            body_inertia.get(b * 3).copied().unwrap_or(0.0),
+            body_inertia.get(b * 3 + 1).copied().unwrap_or(0.0),
+            body_inertia.get(b * 3 + 2).copied().unwrap_or(0.0),
+        ];
+        let Some(half) = inertia_half_extents(mass, inertia) else {
+            boxes.push(None);
+            continue;
+        };
+        let tk = r
+            .transforms
+            .insert(awsm_renderer::transforms::Transform::default(), Some(root));
+        // A UNIT cube (half-extent 1 on each axis) so the node's scale is
+        // literally the half-extents.
+        let mesh = awsm_renderer_scene_loader::mesh_data_to_raw(awsm_renderer_meshgen::box_mesh(
+            Vec3::splat(2.0),
+        ));
+        r.add_raw_mesh(mesh, tk, material)
+            .map_err(|e| JsValue::from_str(&format!("inertia box {b}: {e}")))?;
+        boxes.push(Some((tk, half)));
+    }
+
+    let start = inertia_offset(ngeom, njnt);
+    let region =
+        js_sys::Float32Array::new(sab).subarray(start as u32, (start + nbody * POSE_STRIDE) as u32);
+    Ok(InertiaOverlay {
+        region,
+        scratch: vec![0.0; nbody * POSE_STRIDE],
+        boxes,
     })
 }
 

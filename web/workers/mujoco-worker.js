@@ -19,12 +19,14 @@ let data = null;
 let timestep = 0.005;
 let ngeom = 0;
 let njnt = 0;
+let nbody = 0;
 
 // Pose block views (set on "start").
 let header = null;   // Int32Array  [seq, steps, ngeom, ncon]
 let poses = null;    // Float32Array, 7 floats per geom after the header
 let contacts = null; // Float32Array, 7 floats per contact after the poses
 let joints = null;   // Float32Array, 6 floats per joint after the contacts
+let inertia = null;  // Float32Array, 7 floats per body after the joints
 let steps_total = 0;
 
 // Must match protocol.rs. Contacts are a DEBUG overlay: the count varies every
@@ -77,6 +79,7 @@ async function init({ mujoco_js, mujoco_wasm, model_xml }) {
     data = new mujoco.MjData(model);
     ngeom = model.ngeom;
     njnt = model.njnt;
+    nbody = model.nbody;
     // model.opt is an embind struct wrapper; read the timestep defensively so
     // an API change degrades to the humanoid's authored 5 ms, not a crash.
     try {
@@ -96,6 +99,7 @@ async function init({ mujoco_js, mujoco_wasm, model_xml }) {
         kind: "model",
         ngeom,
         njnt,
+        nbody,
         timestep,
         // .slice() detaches plain copies safe to structured-clone.
         geom_type: model.geom_type.slice(),
@@ -108,6 +112,11 @@ async function init({ mujoco_js, mujoco_wasm, model_xml }) {
         // a single axis worth drawing.
         jnt_type: model.jnt_type.slice(),
         jnt_group: model.jnt_group.slice(),
+        // The equivalent inertia BOX's half-extents are static, so they are
+        // derived once on the render side from these rather than republished
+        // every step.
+        body_mass: model.body_mass.slice(),
+        body_inertia: model.body_inertia.slice(),
     });
 }
 
@@ -119,6 +128,11 @@ function start(sab) {
         sab,
         (4 + ngeom * 7 + MAX_CONTACTS * CONTACT_STRIDE) * 4,
         njnt * JOINT_STRIDE,
+    );
+    inertia = new Float32Array(
+        sab,
+        (4 + ngeom * 7 + MAX_CONTACTS * CONTACT_STRIDE + njnt * JOINT_STRIDE) * 4,
+        nbody * 7,
     );
     header[2] = ngeom;
     publish(); // the settled initial pose (mj_forward ran at init)
@@ -150,10 +164,11 @@ function publish() {
     const xmat = data.geom_xmat;  // live f64 view, 9 per geom (row-major)
     for (let g = 0; g < ngeom; g++) {
         const o = g * 7;
-        xposToPose(xpos, xmat, g, o);
+        matToPose(xpos, xmat, g, poses, o);
     }
     publishContacts();
     publishJoints();
+    publishInertia();
     Atomics.store(header, 1, steps_total);
     Atomics.store(header, 0, header[0] + 1); // even — stable
 }
@@ -214,6 +229,17 @@ function publishJoints() {
     }
 }
 
+// Body INERTIAL frames — the frame the equivalent inertia box is drawn in,
+// which is NOT the body frame: it is offset to the centre of mass and rotated
+// onto the principal axes.
+function publishInertia() {
+    const xipos = data.xipos; // 3 per body
+    const ximat = data.ximat; // 9 per body, row-major
+    for (let b = 0; b < nbody; b++) {
+        matToPose(xipos, ximat, b, inertia, b * 7);
+    }
+}
+
 // The normal force at contact `c`, newtons. mj_contactForce reports in the
 // contact's own frame, whose first axis IS the normal, so element 0 is the
 // answer with no projection.
@@ -239,7 +265,12 @@ function normalForce(c) {
     }
 }
 
-function xposToPose(xpos, xmat, g, o) {
+// Write entry `i` of a MuJoCo (positions, row-major 3x3 matrices) pair into
+// `target` at float offset `o` as a 7-float pose. Shared by the geom poses and
+// the inertia-box frames, which are the same shape.
+function matToPose(xpos, xmat, i, target, o) {
+    const g = i;
+    const poses = target;
     poses[o] = xpos[g * 3];
     poses[o + 1] = xpos[g * 3 + 1];
     poses[o + 2] = xpos[g * 3 + 2];

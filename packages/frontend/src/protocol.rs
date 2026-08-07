@@ -27,7 +27,9 @@
 //! f32[C + c*7 + 6]     contact c NORMAL FORCE    (newtons)
 //! f32[J + j*6 + 0..3]  joint j world ANCHOR      (MuJoCo frame, metres)
 //! f32[J + j*6 + 3..6]  joint j world AXIS        (unit, MuJoCo frame)
-//!     where C = 4 + ngeom*7 and J = C + MAX_CONTACTS*7
+//! f32[I + b*7 + 0..3]  body b INERTIAL position  (MuJoCo frame, metres)
+//! f32[I + b*7 + 3..7]  body b INERTIAL rotation  (quaternion, glam x,y,z,w)
+//!     where C = 4 + ngeom*7, J = C + MAX_CONTACTS*7, I = J + njnt*6
 //! ```
 //!
 //! ## The contact region is a DEBUG overlay
@@ -85,9 +87,18 @@ pub fn joint_offset(ngeom: usize) -> usize {
     contact_offset(ngeom) + MAX_CONTACTS * CONTACT_STRIDE
 }
 
-/// Byte size of the pose block, including both debug regions.
-pub fn pose_block_bytes(ngeom: usize, njnt: usize) -> usize {
-    (joint_offset(ngeom) + njnt * JOINT_STRIDE) * 4
+/// f32 index where the inertia region starts.
+///
+/// One entry per body, same shape as a geom pose — the equivalent inertia BOX
+/// is a rigid frame like any other. Its half-extents are static, derived once
+/// from the model's mass and inertia, so they never cross the wire.
+pub fn inertia_offset(ngeom: usize, njnt: usize) -> usize {
+    joint_offset(ngeom) + njnt * JOINT_STRIDE
+}
+
+/// Byte size of the pose block, including all three debug regions.
+pub fn pose_block_bytes(ngeom: usize, njnt: usize, nbody: usize) -> usize {
+    (inertia_offset(ngeom, njnt) + nbody * POSE_STRIDE) * 4
 }
 
 /// Render-worker → main messages (loading progress + lifecycle).

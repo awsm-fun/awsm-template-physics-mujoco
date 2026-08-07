@@ -91,6 +91,11 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
         "joints",
         &JsValue::from_bool(search.contains("joints")),
     );
+    set(
+        &payload,
+        "inertia",
+        &JsValue::from_bool(search.contains("inertia")),
+    );
     let transfer = js_sys::Array::new();
     transfer.push(&offscreen);
 
@@ -231,7 +236,11 @@ fn maybe_start(
         .ok()
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0) as usize;
-    let sab = js_sys::SharedArrayBuffer::new(pose_block_bytes(ngeom, njnt) as u32);
+    let nbody = js_sys::Reflect::get(&model, &JsValue::from_str("nbody"))
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as usize;
+    let sab = js_sys::SharedArrayBuffer::new(pose_block_bytes(ngeom, njnt, nbody) as u32);
 
     if let Some(mujoco) = mujoco_ref.borrow().as_ref() {
         let start = js_sys::Object::new();
