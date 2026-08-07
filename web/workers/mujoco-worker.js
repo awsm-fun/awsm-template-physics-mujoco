@@ -123,7 +123,10 @@ function xposToPose(xpos, xmat, g, o) {
     poses[o] = xpos[g * 3];
     poses[o + 1] = xpos[g * 3 + 1];
     poses[o + 2] = xpos[g * 3 + 2];
-    // Row-major 3×3 → quaternion (glam order x,y,z,w).
+    // Row-major 3x3 -> quaternion, written in MUJOCO's order [w,x,y,z].
+    // That is deliberate: the pose block IS a stream frame in the documented
+    // convention, so this worker could dump it verbatim as a capture file and
+    // the renderer's pose sink takes it with no reshaping on either side.
     const m = g * 9;
     const m00 = xmat[m], m01 = xmat[m + 1], m02 = xmat[m + 2];
     const m10 = xmat[m + 3], m11 = xmat[m + 4], m12 = xmat[m + 5];
@@ -155,8 +158,8 @@ function xposToPose(xpos, xmat, g, o) {
         y = (m12 + m21) / s;
         z = 0.25 * s;
     }
-    poses[o + 3] = x;
-    poses[o + 4] = y;
-    poses[o + 5] = z;
-    poses[o + 6] = w;
+    poses[o + 3] = w;
+    poses[o + 4] = x;
+    poses[o + 5] = y;
+    poses[o + 6] = z;
 }

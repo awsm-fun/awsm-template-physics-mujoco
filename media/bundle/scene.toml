@@ -1,15 +1,11 @@
-name = "scene"
+name = "untitled.awsm"
 custom_materials = []
 animations = []
 
-[environment.skybox.ktx]
-asset_id = "50c69cd7-bf31-46ec-b534-99f2e93907ee"
-
-[environment.specular.ktx]
-asset_id = "045ba5dd-0f72-47f4-bfb3-00cd3879ea41"
-
-[environment.irradiance.ktx]
-asset_id = "e82de494-4577-4576-bc02-785b931f0ad0"
+[environment]
+skybox = "built_in_default"
+specular = "built_in_default"
+irradiance = "built_in_default"
 
 [environment.probe]
 enabled = false
@@ -24,13 +20,30 @@ half_extents = [
     10.0,
 ]
 
+[environment.rotation]
+skybox = [
+    0.0,
+    0.0,
+    0.0,
+]
+specular = [
+    0.0,
+    0.0,
+    0.0,
+]
+irradiance = [
+    0.0,
+    0.0,
+    0.0,
+]
+
 [shadows]
-sscs_enabled = true
-sscs_step_count = 12
+sscs_enabled = false
+sscs_step_count = 16
 sscs_step_world = 0.03999999910593033
-sscs_thickness = 0.3499999940395355
+sscs_thickness = 0.05000000074505806
 sscs_directional_darkening = 0.3499999940395355
-sscs_punctual_darkening = 0.8500000238418579
+sscs_punctual_darkening = 0.8999999761581421
 atlas_size = 4096
 evsm_atlas_size = 2048
 evsm_exponent = 10.0
@@ -43,7 +56,7 @@ debug_cascade_colors = false
 tonemapping = "khronos_neutral_pbr"
 bloom = false
 dof = false
-exposure = -1.0
+exposure = 0.0
 bloom_threshold = 1.0
 bloom_knee = 0.5
 bloom_intensity = 1.0
@@ -62,1369 +75,125 @@ temporal = false
 temporal_weight = 0.8999999761581421
 bvh_reflections = false
 
-[assets.ff9bec40-49f9-44cf-8a53-d245f955480c]
-gltf_material_asset_ids = []
-gltf_image_asset_ids = []
-content_hash = "5e8c1696af50e78c56fb5d719bf3a15c5be54f18055844ec60ff58d1b4181776"
-texture_encoding = "ktx2"
-texture_two_channel_normal = true
-lod = "none"
-
-[assets.ff9bec40-49f9-44cf-8a53-d245f955480c.source.texture.raster]
-display_name = "dark_wood_nor_gl_1k.png"
-color_kind = "normal"
-
-[assets.137f0dd4-4d5b-41b4-ab80-8832d30da9c9]
-gltf_material_asset_ids = []
-gltf_image_asset_ids = []
-content_hash = "ec481ae2ffce4aac982819aeed3ccc6e70c58317fb80dbf493db0e45e13d5ec8"
-texture_encoding = "ktx2"
-texture_two_channel_normal = true
-lod = "none"
-
-[assets.137f0dd4-4d5b-41b4-ab80-8832d30da9c9.source.texture.raster]
-display_name = "felt2_normal.png"
-color_kind = "normal"
-
-[assets.83d45df8-4ce2-4d2f-84f0-174f12ed5a66]
-gltf_material_asset_ids = []
-gltf_image_asset_ids = []
-content_hash = "1dcbb4fc8f7ca1f866e9469d3d2db994313b278deb1c38bdddef25a0205b2d01"
-texture_encoding = "ktx2"
-lod = "none"
-
-[assets.83d45df8-4ce2-4d2f-84f0-174f12ed5a66.source.texture.raster]
-display_name = "dark_wood_diff_1k.png"
-color_kind = "albedo"
-
-[assets.b6b28a02-ac62-425a-9505-961bbdceab0b]
-gltf_material_asset_ids = []
-gltf_image_asset_ids = []
-content_hash = "6961e08e8eca17f3dc44c5ed291f1f0d730efef496aaf397994ee0bd42a958a8"
-texture_encoding = "ktx2"
-lod = "none"
-
-[assets.b6b28a02-ac62-425a-9505-961bbdceab0b.source.texture.raster]
-display_name = "dark_wood_arm_1k.png"
-color_kind = "occlusion"
-
-[assets.58171de2-d36d-4cbe-9c7d-e72118614331]
-gltf_material_asset_ids = []
-gltf_image_asset_ids = []
-content_hash = ""
-lod = "none"
-
-[assets.58171de2-d36d-4cbe-9c7d-e72118614331.source.mesh.primitive.box]
-dims = [
-    1.0,
-    1.0,
-    1.0,
+[post_process.atmosphere]
+mode = "off"
+color = [
+    0.5,
+    0.6000000238418579,
+    0.699999988079071,
 ]
+density = 0.019999999552965164
+base_height = 0.0
+height_falloff = 0.0
+scattering_anisotropy = 0.30000001192092896
+volumetric_distance = 80.0
+volumetric_temporal = false
 
-[assets.97e1977a-f938-4821-a01d-bc6323b9ef72]
+[assets.4e651af1-f0b2-4413-aee7-efb5444ef0e2]
 gltf_material_asset_ids = []
 gltf_image_asset_ids = []
 content_hash = ""
 lod = "none"
 
-[assets.97e1977a-f938-4821-a01d-bc6323b9ef72.source.mesh.primitive.box]
-dims = [
-    1.0,
-    1.0,
-    1.0,
-]
+[assets.4e651af1-f0b2-4413-aee7-efb5444ef0e2.source]
+mesh = "glb"
 
-[assets.6d2fc755-9dd1-419e-a635-310d7e28fd74]
-gltf_material_asset_ids = []
-gltf_image_asset_ids = []
-content_hash = "5b978ea2f5083fade03d85718086c4c0e34fc52489837b14f39b39acffc79c23"
-texture_encoding = "ktx2"
-lod = "none"
-
-[assets.6d2fc755-9dd1-419e-a635-310d7e28fd74.source.texture.raster]
-display_name = "ball_billiard3.png"
-color_kind = "albedo"
-
-[assets.384af2f1-1251-492c-8e63-309ea21eb137]
+[assets.dc91dd80-b3b3-481c-9055-c5055d46346a]
 gltf_material_asset_ids = []
 gltf_image_asset_ids = []
 content_hash = ""
 lod = "none"
 
-[assets.384af2f1-1251-492c-8e63-309ea21eb137.source.mesh.primitive.sphere]
-radius = 0.5
-segments_long = 32
-segments_lat = 16
+[assets.dc91dd80-b3b3-481c-9055-c5055d46346a.source]
+mesh = "glb"
 
-[assets.2dc11eab-f349-467e-b25a-c707f3cfcf7e]
+[assets.38149710-f6c4-4e5e-8df3-1de095ab533c]
 gltf_material_asset_ids = []
 gltf_image_asset_ids = []
 content_hash = ""
 lod = "none"
 
-[assets.2dc11eab-f349-467e-b25a-c707f3cfcf7e.source.mesh.primitive.box]
-dims = [
-    1.0,
-    1.0,
-    1.0,
-]
+[assets.38149710-f6c4-4e5e-8df3-1de095ab533c.source]
+mesh = "glb"
 
-[assets.a126a74e-a73b-4d59-aa87-ed7f0aab157a]
-gltf_material_asset_ids = []
-gltf_image_asset_ids = []
-content_hash = "aabf95de273813366c0e799ed91a5ebe7e8d856c636bf4fc4192076285af7a0b"
-texture_encoding = "ktx2"
-lod = "none"
-
-[assets.a126a74e-a73b-4d59-aa87-ed7f0aab157a.source.texture.raster]
-display_name = "ball_billiard3_red.png"
-color_kind = "albedo"
-
-[assets.973b391a-c58a-4740-aa7d-dc193730fd1c]
-gltf_material_asset_ids = []
-gltf_image_asset_ids = []
-content_hash = "a7188e2e6808a2403913f0ddae00a9979f1bf1860f71a9743132de3a218d57c7"
-texture_encoding = "ktx2"
-lod = "none"
-
-[assets.973b391a-c58a-4740-aa7d-dc193730fd1c.source.texture.raster]
-display_name = "felt2_mr.png"
-color_kind = "metallic_roughness"
-
-[assets.6783132a-1f59-4e7f-9ca7-2a4448316e35]
+[assets.f52d08aa-2671-4e6b-beef-6554a7fead09]
 gltf_material_asset_ids = []
 gltf_image_asset_ids = []
 content_hash = ""
 lod = "none"
 
-[assets.6783132a-1f59-4e7f-9ca7-2a4448316e35.source.mesh.primitive.sphere]
-radius = 0.5
-segments_long = 32
-segments_lat = 16
+[assets.f52d08aa-2671-4e6b-beef-6554a7fead09.source]
+mesh = "glb"
 
-[assets.8b7f0c8f-ba34-41bd-9be7-f13c470d927f]
-gltf_material_asset_ids = []
-gltf_image_asset_ids = []
-content_hash = "ab30f374b1b8480495d7edb921a6fe73f946cead6efa2044b6eb8e0dccc10dce"
-texture_encoding = "ktx2"
-lod = "none"
-
-[assets.8b7f0c8f-ba34-41bd-9be7-f13c470d927f.source.texture.raster]
-display_name = "felt2_albedo.png"
-color_kind = "albedo"
-
-[assets.c38fa11e-12e6-4bbd-be09-b0b1c0fce39f]
+[assets.7c373242-789f-47c3-be42-62e108826567]
 gltf_material_asset_ids = []
 gltf_image_asset_ids = []
 content_hash = ""
 lod = "none"
 
-[assets.c38fa11e-12e6-4bbd-be09-b0b1c0fce39f.source.mesh.primitive.box]
-dims = [
-    1.0,
-    1.0,
-    1.0,
-]
+[assets.7c373242-789f-47c3-be42-62e108826567.source]
+mesh = "glb"
 
-[assets.90eee8bd-c1bc-4fc8-a920-d81a2718098a]
+[assets.b7bc201e-5ec8-458e-88a7-84c9d1744223]
 gltf_material_asset_ids = []
 gltf_image_asset_ids = []
 content_hash = ""
 lod = "none"
 
-[assets.90eee8bd-c1bc-4fc8-a920-d81a2718098a.source.mesh.primitive.box]
-dims = [
-    1.0,
-    1.0,
-    1.0,
-]
+[assets.b7bc201e-5ec8-458e-88a7-84c9d1744223.source]
+mesh = "glb"
 
-[assets.376bfd49-1b7a-4c8d-9b1e-56c9fd2f7ee7]
+[assets.58239d1f-97ff-4685-ad7d-2f8d4a9c72f0]
 gltf_material_asset_ids = []
 gltf_image_asset_ids = []
-content_hash = "a9a8decbfef26131310bd223f994f5a44e59be58ee3fab11b44ce92f63051bc1"
-texture_encoding = "ktx2"
+content_hash = ""
 lod = "none"
 
-[assets.376bfd49-1b7a-4c8d-9b1e-56c9fd2f7ee7.source.texture.raster]
-display_name = "ball_billiard2_mr.png"
-color_kind = "metallic_roughness"
+[assets.58239d1f-97ff-4685-ad7d-2f8d4a9c72f0.source]
+mesh = "glb"
+
+[assets.c30dc3e8-5696-4fe7-8bb2-81ca415b441c]
+gltf_material_asset_ids = []
+gltf_image_asset_ids = []
+content_hash = ""
+lod = "none"
+
+[assets.c30dc3e8-5696-4fe7-8bb2-81ca415b441c.source]
+mesh = "glb"
+
+[assets.3c3aafd8-d306-4678-9aa0-ed25d396ccb7]
+gltf_material_asset_ids = []
+gltf_image_asset_ids = []
+content_hash = ""
+lod = "none"
+
+[assets.3c3aafd8-d306-4678-9aa0-ed25d396ccb7.source]
+mesh = "glb"
+
+[assets.f3a79a9c-7ab1-4542-b8bb-5f3a612627da]
+gltf_material_asset_ids = []
+gltf_image_asset_ids = []
+content_hash = ""
+lod = "none"
+
+[assets.f3a79a9c-7ab1-4542-b8bb-5f3a612627da.source]
+mesh = "glb"
+
+[assets.54a398fa-fb9a-47af-a86d-635b88adf997]
+gltf_material_asset_ids = []
+gltf_image_asset_ids = []
+content_hash = ""
+lod = "none"
+
+[assets.54a398fa-fb9a-47af-a86d-635b88adf997.source]
+mesh = "glb"
 
 [mixer]
 layers = []
 
 [[nodes]]
-id = "b57a035d-66a7-472d-af81-ed0e2323aa8c"
-name = "Table"
-kind = "group"
-locked = false
-visible = true
-prefab = false
-
-[nodes.transform]
-translation = [
-    0.0,
-    0.0,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    1.0,
-    1.0,
-    1.0,
-]
-
-[[nodes.children]]
-id = "2dc11eab-f349-467e-b25a-c707f3cfcf7e"
-name = "Tabletop_Mesh"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    0.0,
-    -0.10000000149011612,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    6.0,
-    0.20000000298023224,
-    4.0,
-]
-
-[nodes.children.kind.mesh]
-mesh = "2dc11eab-f349-467e-b25a-c707f3cfcf7e"
-selected_variant = "c8f27cb5-8c80-47a4-af11-9067298bf3cf"
-
-[[nodes.children.kind.mesh.material_variants]]
-id = "c8f27cb5-8c80-47a4-af11-9067298bf3cf"
-name = "Felt"
-
-[nodes.children.kind.mesh.material_variants.instance]
-asset = "ae0d8b89-3d4f-4ef0-8c0c-9c715f7e0c0a"
-
-[nodes.children.kind.mesh.material_variants.instance.inline]
-label = "Felt"
-base_color = [
-    0.550000011920929,
-    0.8500000238418579,
-    0.6000000238418579,
-    1.0,
-]
-metallic = 0.0
-roughness = 1.0
-emissive = [
-    0.0,
-    0.0,
-    0.0,
-]
-normal_scale = 1.25
-occlusion_strength = 1.0
-ssr_mask = 1.0
-double_sided = false
-vertex_colors_enabled = false
-alpha_mode = "opaque"
-shading = "pbr"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture]
-asset = "8b7f0c8f-ba34-41bd-9be7-f13c470d927f"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    10.0,
-    7.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture]
-asset = "973b391a-c58a-4740-aa7d-dc193730fd1c"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    10.0,
-    7.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture]
-asset = "137f0dd4-4d5b-41b4-ab80-8832d30da9c9"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    10.0,
-    7.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.extensions.sheen]
-roughness_factor = 0.75
-color_factor = [
-    0.3199999928474426,
-    0.46000000834465027,
-    0.3499999940395355,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
-
-[nodes.children.kind.mesh.shadow]
-cast = true
-receive = true
-
-[nodes.children.kind.mesh.lod]
-kind = "none"
-
-[[nodes.children]]
-id = "c38fa11e-12e6-4bbd-be09-b0b1c0fce39f"
-name = "Wall_North_Mesh"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    0.0,
-    0.20000000298023224,
-    -1.9500000476837158,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    6.0,
-    0.4000000059604645,
-    0.10000000149011612,
-]
-
-[nodes.children.kind.mesh]
-mesh = "c38fa11e-12e6-4bbd-be09-b0b1c0fce39f"
-selected_variant = "6ff6bad4-df97-4f7e-91a7-17ae8695aeef"
-
-[[nodes.children.kind.mesh.material_variants]]
-id = "6ff6bad4-df97-4f7e-91a7-17ae8695aeef"
-name = "Rails"
-
-[nodes.children.kind.mesh.material_variants.instance]
-asset = "3db1a661-14d7-40e8-b166-bab1c2e24b21"
-
-[nodes.children.kind.mesh.material_variants.instance.inline]
-label = "Rails"
-base_color = [
-    1.0,
-    1.0,
-    1.0,
-    1.0,
-]
-metallic = 0.0
-roughness = 1.0
-emissive = [
-    0.0,
-    0.0,
-    0.0,
-]
-normal_scale = 1.600000023841858
-occlusion_strength = 0.550000011920929
-ssr_mask = 1.0
-double_sided = false
-vertex_colors_enabled = false
-alpha_mode = "opaque"
-shading = "pbr"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture]
-asset = "83d45df8-4ce2-4d2f-84f0-174f12ed5a66"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    4.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture]
-asset = "b6b28a02-ac62-425a-9505-961bbdceab0b"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    4.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture]
-asset = "ff9bec40-49f9-44cf-8a53-d245f955480c"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    4.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture]
-asset = "b6b28a02-ac62-425a-9505-961bbdceab0b"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    4.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.extensions.clearcoat]
-factor = 0.550000011920929
-roughness_factor = 0.11999999731779099
-normal_scale = 0.0
-
-[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
-
-[nodes.children.kind.mesh.shadow]
-cast = true
-receive = true
-
-[nodes.children.kind.mesh.lod]
-kind = "none"
-
-[[nodes.children]]
-id = "90eee8bd-c1bc-4fc8-a920-d81a2718098a"
-name = "Wall_South_Mesh"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    0.0,
-    0.20000000298023224,
-    1.9500000476837158,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    6.0,
-    0.4000000059604645,
-    0.10000000149011612,
-]
-
-[nodes.children.kind.mesh]
-mesh = "90eee8bd-c1bc-4fc8-a920-d81a2718098a"
-selected_variant = "001d0a79-68e9-45a5-99fe-055b163793aa"
-
-[[nodes.children.kind.mesh.material_variants]]
-id = "001d0a79-68e9-45a5-99fe-055b163793aa"
-name = "Rails"
-
-[nodes.children.kind.mesh.material_variants.instance]
-asset = "3db1a661-14d7-40e8-b166-bab1c2e24b21"
-
-[nodes.children.kind.mesh.material_variants.instance.inline]
-label = "Rails"
-base_color = [
-    1.0,
-    1.0,
-    1.0,
-    1.0,
-]
-metallic = 0.0
-roughness = 1.0
-emissive = [
-    0.0,
-    0.0,
-    0.0,
-]
-normal_scale = 1.600000023841858
-occlusion_strength = 0.550000011920929
-ssr_mask = 1.0
-double_sided = false
-vertex_colors_enabled = false
-alpha_mode = "opaque"
-shading = "pbr"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture]
-asset = "83d45df8-4ce2-4d2f-84f0-174f12ed5a66"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    4.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture]
-asset = "b6b28a02-ac62-425a-9505-961bbdceab0b"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    4.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture]
-asset = "ff9bec40-49f9-44cf-8a53-d245f955480c"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    4.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture]
-asset = "b6b28a02-ac62-425a-9505-961bbdceab0b"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    4.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.extensions.clearcoat]
-factor = 0.550000011920929
-roughness_factor = 0.11999999731779099
-normal_scale = 0.0
-
-[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
-
-[nodes.children.kind.mesh.shadow]
-cast = true
-receive = true
-
-[nodes.children.kind.mesh.lod]
-kind = "none"
-
-[[nodes.children]]
-id = "58171de2-d36d-4cbe-9c7d-e72118614331"
-name = "Wall_West_Mesh"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    -2.950000047683716,
-    0.20000000298023224,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    0.10000000149011612,
-    0.4000000059604645,
-    4.0,
-]
-
-[nodes.children.kind.mesh]
-mesh = "58171de2-d36d-4cbe-9c7d-e72118614331"
-selected_variant = "c76e706d-13c7-4238-a198-e5d05c7f0961"
-
-[[nodes.children.kind.mesh.material_variants]]
-id = "c76e706d-13c7-4238-a198-e5d05c7f0961"
-name = "Rails"
-
-[nodes.children.kind.mesh.material_variants.instance]
-asset = "3db1a661-14d7-40e8-b166-bab1c2e24b21"
-
-[nodes.children.kind.mesh.material_variants.instance.inline]
-label = "Rails"
-base_color = [
-    1.0,
-    1.0,
-    1.0,
-    1.0,
-]
-metallic = 0.0
-roughness = 1.0
-emissive = [
-    0.0,
-    0.0,
-    0.0,
-]
-normal_scale = 1.600000023841858
-occlusion_strength = 0.550000011920929
-ssr_mask = 1.0
-double_sided = false
-vertex_colors_enabled = false
-alpha_mode = "opaque"
-shading = "pbr"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture]
-asset = "83d45df8-4ce2-4d2f-84f0-174f12ed5a66"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    3.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture]
-asset = "b6b28a02-ac62-425a-9505-961bbdceab0b"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    3.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture]
-asset = "ff9bec40-49f9-44cf-8a53-d245f955480c"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    3.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture]
-asset = "b6b28a02-ac62-425a-9505-961bbdceab0b"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    3.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.extensions.clearcoat]
-factor = 0.550000011920929
-roughness_factor = 0.11999999731779099
-normal_scale = 0.0
-
-[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
-
-[nodes.children.kind.mesh.shadow]
-cast = true
-receive = true
-
-[nodes.children.kind.mesh.lod]
-kind = "none"
-
-[[nodes.children]]
-id = "97e1977a-f938-4821-a01d-bc6323b9ef72"
-name = "Wall_East_Mesh"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    2.950000047683716,
-    0.20000000298023224,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    0.10000000149011612,
-    0.4000000059604645,
-    4.0,
-]
-
-[nodes.children.kind.mesh]
-mesh = "97e1977a-f938-4821-a01d-bc6323b9ef72"
-selected_variant = "da16614e-1cc6-423f-ac83-14b690e6a006"
-
-[[nodes.children.kind.mesh.material_variants]]
-id = "da16614e-1cc6-423f-ac83-14b690e6a006"
-name = "Rails"
-
-[nodes.children.kind.mesh.material_variants.instance]
-asset = "3db1a661-14d7-40e8-b166-bab1c2e24b21"
-
-[nodes.children.kind.mesh.material_variants.instance.inline]
-label = "Rails"
-base_color = [
-    1.0,
-    1.0,
-    1.0,
-    1.0,
-]
-metallic = 0.0
-roughness = 1.0
-emissive = [
-    0.0,
-    0.0,
-    0.0,
-]
-normal_scale = 1.600000023841858
-occlusion_strength = 0.550000011920929
-ssr_mask = 1.0
-double_sided = false
-vertex_colors_enabled = false
-alpha_mode = "opaque"
-shading = "pbr"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture]
-asset = "83d45df8-4ce2-4d2f-84f0-174f12ed5a66"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    3.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture]
-asset = "b6b28a02-ac62-425a-9505-961bbdceab0b"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    3.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture]
-asset = "ff9bec40-49f9-44cf-8a53-d245f955480c"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    3.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.normal_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture]
-asset = "b6b28a02-ac62-425a-9505-961bbdceab0b"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture.transform]
-offset = [
-    0.0,
-    0.0,
-]
-rotation = 0.0
-scale = [
-    3.0,
-    1.0,
-]
-
-[nodes.children.kind.mesh.material_variants.instance.inline.occlusion_texture.sampler]
-wrap_u = "repeat"
-wrap_v = "repeat"
-mag_filter = "linear"
-min_filter = "linear"
-mipmap_filter = "linear"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.extensions.clearcoat]
-factor = 0.550000011920929
-roughness_factor = 0.11999999731779099
-normal_scale = 0.0
-
-[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
-
-[nodes.children.kind.mesh.shadow]
-cast = true
-receive = true
-
-[nodes.children.kind.mesh.lod]
-kind = "none"
-
-[[nodes.children]]
-id = "124e483d-7781-4401-8870-51acdf7bb840"
-name = "Tabletop_Collider"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    0.0,
-    -0.10000000149011612,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    1.0,
-    1.0,
-    1.0,
-]
-
-[nodes.children.kind.collider.box]
-half_extents = [
-    3.0,
-    0.10000000149011612,
-    2.0,
-]
-
-[[nodes.children]]
-id = "45d12a80-a688-4ce9-8494-11568423ef9c"
-name = "Wall_South_Collider"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    0.0,
-    0.20000000298023224,
-    1.9500000476837158,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    1.0,
-    1.0,
-    1.0,
-]
-
-[nodes.children.kind.collider.box]
-half_extents = [
-    3.0,
-    0.20000000298023224,
-    0.05000000074505806,
-]
-
-[[nodes.children]]
-id = "adf45221-5603-41a8-ae2d-7ea08da39da9"
-name = "Wall_West_Collider"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    -2.950000047683716,
-    0.20000000298023224,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    1.0,
-    1.0,
-    1.0,
-]
-
-[nodes.children.kind.collider.box]
-half_extents = [
-    0.05000000074505806,
-    0.20000000298023224,
-    2.0,
-]
-
-[[nodes.children]]
-id = "d6f742ec-1042-4c79-9ffe-93269651402a"
-name = "Wall_East_Collider"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    2.950000047683716,
-    0.20000000298023224,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    1.0,
-    1.0,
-    1.0,
-]
-
-[nodes.children.kind.collider.box]
-half_extents = [
-    0.05000000074505806,
-    0.20000000298023224,
-    2.0,
-]
-
-[[nodes.children]]
-id = "70064b15-a669-4da3-a828-910257f2dfa0"
-name = "Wall_North_Collider"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    0.0,
-    0.20000000298023224,
-    -1.9500000476837158,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    1.0,
-    1.0,
-    1.0,
-]
-
-[nodes.children.kind.collider.box]
-half_extents = [
-    3.0,
-    0.20000000298023224,
-    0.05000000074505806,
-]
-
-[[nodes]]
-id = "ec60d239-ad85-4c1c-b278-52db46025175"
-name = "Ball"
-kind = "group"
-locked = false
-visible = true
-prefab = false
-
-[nodes.transform]
-translation = [
-    0.0,
-    0.30000001192092896,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    1.0,
-    1.0,
-    1.0,
-]
-
-[[nodes.children]]
-id = "6783132a-1f59-4e7f-9ca7-2a4448316e35"
-name = "Ball_Mesh"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    0.9125751256942749,
-    0.0,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    0.6000000238418579,
-    0.6000000238418579,
-    0.6000000238418579,
-]
-
-[nodes.children.kind.mesh]
-mesh = "6783132a-1f59-4e7f-9ca7-2a4448316e35"
-selected_variant = "20c2d35f-c361-430e-92b2-32708669af48"
-
-[[nodes.children.kind.mesh.material_variants]]
-id = "20c2d35f-c361-430e-92b2-32708669af48"
-name = "Ball_Ivory"
-
-[nodes.children.kind.mesh.material_variants.instance]
-asset = "2be99967-5a80-4883-a23a-7c8284a4b408"
-
-[nodes.children.kind.mesh.material_variants.instance.inline]
-label = "Ball_Ivory"
-base_color = [
-    0.9900000095367432,
-    0.9549999833106995,
-    0.875,
-    1.0,
-]
-metallic = 0.0
-roughness = 0.30000001192092896
-emissive = [
-    0.0,
-    0.0,
-    0.0,
-]
-normal_scale = 1.0
-occlusion_strength = 1.0
-ssr_mask = 1.0
-double_sided = false
-vertex_colors_enabled = false
-alpha_mode = "opaque"
-shading = "pbr"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture]
-asset = "6d2fc755-9dd1-419e-a635-310d7e28fd74"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture]
-asset = "376bfd49-1b7a-4c8d-9b1e-56c9fd2f7ee7"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.extensions.clearcoat]
-factor = 0.8500000238418579
-roughness_factor = 0.05000000074505806
-normal_scale = 0.0
-
-[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
-
-[[nodes.children.kind.mesh.material_variants]]
-id = "07dff074-476f-4b9e-ad83-f7e07dd1f86a"
-name = "Ball_Player_Red"
-
-[nodes.children.kind.mesh.material_variants.instance]
-asset = "2be99967-5a80-4883-a23a-7c8284a4b408"
-
-[nodes.children.kind.mesh.material_variants.instance.inline]
-label = "Ball_Ivory"
-base_color = [
-    0.9900000095367432,
-    0.9549999833106995,
-    0.875,
-    1.0,
-]
-metallic = 0.0
-roughness = 1.0
-emissive = [
-    0.0,
-    0.0,
-    0.0,
-]
-normal_scale = 1.0
-occlusion_strength = 1.0
-ssr_mask = 1.0
-double_sided = false
-vertex_colors_enabled = false
-alpha_mode = "opaque"
-shading = "pbr"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.base_color_texture]
-asset = "a126a74e-a73b-4d59-aa87-ed7f0aab157a"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.metallic_roughness_texture]
-asset = "376bfd49-1b7a-4c8d-9b1e-56c9fd2f7ee7"
-
-[nodes.children.kind.mesh.material_variants.instance.inline.extensions.clearcoat]
-factor = 0.8500000238418579
-roughness_factor = 0.05000000074505806
-normal_scale = 0.0
-
-[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
-
-[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
-
-[nodes.children.kind.mesh.shadow]
-cast = true
-receive = true
-
-[nodes.children.kind.mesh.lod]
-kind = "none"
-
-[[nodes.children]]
-id = "65e0782c-a4ae-4249-bf89-fbe5fa73b06d"
-name = "Ball_Collider"
-locked = false
-visible = true
-prefab = false
-children = []
-
-[nodes.children.transform]
-translation = [
-    0.0,
-    0.0,
-    0.0,
-]
-rotation = [
-    0.0,
-    0.0,
-    0.0,
-    1.0,
-]
-scale = [
-    1.0,
-    1.0,
-    1.0,
-]
-
-[nodes.children.kind.collider.sphere]
-radius = 0.30000001192092896
-
-[[nodes]]
-id = "a287944d-7a75-4a9e-ab9d-11648cd9d55d"
-name = "Point Light"
+id = "3947abc1-b7c3-482c-a02c-23d997e199ed"
+name = "Directional Light"
 locked = false
 visible = true
 prefab = false
@@ -1433,14 +202,14 @@ children = []
 [nodes.transform]
 translation = [
     0.0,
-    1.9575040340423584,
+    0.0,
     0.0,
 ]
 rotation = [
+    -0.4226182699203491,
     0.0,
     0.0,
-    0.0,
-    1.0,
+    0.9063077569007874,
 ]
 scale = [
     1.0,
@@ -1448,21 +217,21 @@ scale = [
     1.0,
 ]
 
-[nodes.kind.light.point]
+[nodes.kind.light.directional]
 color = [
     1.0,
     1.0,
     1.0,
 ]
-intensity = 20.0
-range = 100.0
+intensity = 4.0
+volumetric_intensity = 1.0
 
-[nodes.kind.light.point.shadow]
+[nodes.kind.light.directional.shadow]
 cast = true
-depth_bias = 0.0020000000949949026
+depth_bias = 0.0010000000474974513
 normal_bias = 0.0
-resolution = 1024
-hardness = "pcss"
+resolution = 2048
+hardness = "soft"
 pcss_penumbra_scale = 1.0
 kernel_slack = 0.0
 shadow_samples = 16
@@ -1472,3 +241,1663 @@ cascade_split_lambda = 0.5
 evsm_cutoff = "last_cascade"
 far_cascade_update_rate = "every4_frames"
 cube_face_update_rate = "every_frame"
+
+[[nodes]]
+id = "f97f578d-27ba-42ba-8ea2-6df935e711c7"
+name = "Humanoid"
+kind = "group"
+locked = false
+visible = true
+prefab = false
+
+[nodes.transform]
+translation = [
+    0.0,
+    0.0,
+    0.0,
+]
+rotation = [
+    -0.7071067690849304,
+    0.0,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.mujoco.instance]
+model_name = "Humanoid"
+geom_count = 20
+visible_groups = [
+    0,
+    1,
+    2,
+]
+
+[nodes.mujoco.instance.source]
+filename = "humanoid.xml"
+sha256 = "acc9167550bf20580717a551467e6e8d0d03d1916d24bbe4b734ce11afb99406"
+mujoco_version = "3.11.0"
+
+[[nodes.children]]
+id = "ef1e7f46-de7b-46b6-a18d-055e051c63da"
+name = "floor"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.0,
+    0.0,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "f52d08aa-2671-4e6b-beef-6554a7fead09"
+selected_variant = "aec5141b-9ed0-4f53-a0d1-96a9193ba209"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "aec5141b-9ed0-4f53-a0d1-96a9193ba209"
+name = "grid"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "5a53face-5ea1-46b5-8387-e7fb713edb0d"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "grid"
+base_color = [
+    1.0,
+    1.0,
+    1.0,
+    1.0,
+]
+metallic = 0.20000000298023224
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 0
+group = 0
+kind = "plane"
+body = 0
+
+[[nodes.children]]
+id = "c55b8b5b-28fe-48b4-99d5-8c3c3191fa5d"
+name = "torso"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.0,
+    1.281999945640564,
+]
+rotation = [
+    0.7071067690849304,
+    0.0,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "58239d1f-97ff-4685-ad7d-2f8d4a9c72f0"
+selected_variant = "5d4df1e1-a166-4a72-8b1d-108ebd65c333"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "5d4df1e1-a166-4a72-8b1d-108ebd65c333"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 1
+group = 1
+kind = "capsule"
+body = 1
+
+[[nodes.children]]
+id = "c4b4a826-1724-4c38-b234-ac44cc559c33"
+name = "waist_upper"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.009999999776482582,
+    0.0,
+    1.1619999408721924,
+]
+rotation = [
+    0.7071067690849304,
+    0.0,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "54a398fa-fb9a-47af-a86d-635b88adf997"
+selected_variant = "622d67fe-2d31-421d-a335-9eccbff36b6a"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "622d67fe-2d31-421d-a335-9eccbff36b6a"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 2
+group = 1
+kind = "capsule"
+body = 1
+
+[[nodes.children]]
+id = "268618d5-a92d-45df-80e2-6c151976c4b1"
+name = "head"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.0,
+    1.472000002861023,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "dc91dd80-b3b3-481c-9055-c5055d46346a"
+selected_variant = "dcf9bee6-070e-43dc-bffe-295cf35aaff1"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "dcf9bee6-070e-43dc-bffe-295cf35aaff1"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 3
+group = 1
+kind = "sphere"
+body = 2
+
+[[nodes.children]]
+id = "288b33f5-5e9b-46b3-83df-a54f91372388"
+name = "waist_lower"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.009999999776482582,
+    0.0,
+    1.0219999551773071,
+]
+rotation = [
+    0.7071067690849304,
+    0.0,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "54a398fa-fb9a-47af-a86d-635b88adf997"
+selected_variant = "e471dccd-ddfb-4f2a-a78f-4b6f6d82ec87"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "e471dccd-ddfb-4f2a-a78f-4b6f6d82ec87"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 4
+group = 1
+kind = "capsule"
+body = 3
+
+[[nodes.children]]
+id = "fc3ed99b-7572-428a-b171-ef1b14a191f7"
+name = "butt"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.029999999329447746,
+    0.0,
+    0.8569999933242798,
+]
+rotation = [
+    0.7071067690849304,
+    0.0,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "f3a79a9c-7ab1-4542-b8bb-5f3a612627da"
+selected_variant = "877975bc-5020-4687-aa46-fee2863de8ee"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "877975bc-5020-4687-aa46-fee2863de8ee"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 5
+group = 1
+kind = "capsule"
+body = 4
+
+[[nodes.children]]
+id = "01e76084-fd47-4d6b-a415-c9ac3a29e773"
+name = "thigh_right"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.009999999776482582,
+    -0.0949999988079071,
+    0.6470000147819519,
+]
+rotation = [
+    0.0147011149674654,
+    0.0,
+    0.0,
+    0.9998919367790222,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "b7bc201e-5ec8-458e-88a7-84c9d1744223"
+selected_variant = "9a29d353-f8f2-45fe-ae3e-1e178b9f2b01"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "9a29d353-f8f2-45fe-ae3e-1e178b9f2b01"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 6
+group = 1
+kind = "capsule"
+body = 5
+
+[[nodes.children]]
+id = "2e69ca1e-631a-4284-a313-e1abb5cc091f"
+name = "shin_right"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.009999999776482582,
+    -0.09000000357627869,
+    0.2669999897480011,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "4e651af1-f0b2-4413-aee7-efb5444ef0e2"
+selected_variant = "837b095f-ce18-49bb-b933-89050b1c27b7"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "837b095f-ce18-49bb-b933-89050b1c27b7"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 7
+group = 1
+kind = "capsule"
+body = 6
+
+[[nodes.children]]
+id = "8941c5a0-4b0d-44fb-bbdf-8087d1c7f0a5"
+name = "foot1_right"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.02500000037252903,
+    -0.10999999940395355,
+    0.027000000700354576,
+]
+rotation = [
+    -0.06704015284776688,
+    -0.7039216160774231,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "7c373242-789f-47c3-be42-62e108826567"
+selected_variant = "7e9f765a-cf28-4369-a7bf-58c55e572c8e"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "7e9f765a-cf28-4369-a7bf-58c55e572c8e"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 8
+group = 1
+kind = "capsule"
+body = 7
+
+[[nodes.children]]
+id = "47173e3a-c79f-4d95-b380-5df42818f894"
+name = "foot2_right"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.02500000037252903,
+    -0.07000000029802322,
+    0.027000000700354576,
+]
+rotation = [
+    0.06704015284776688,
+    -0.7039216160774231,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "7c373242-789f-47c3-be42-62e108826567"
+selected_variant = "11ca972e-c51e-43db-82c6-4b9147b1fea8"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "11ca972e-c51e-43db-82c6-4b9147b1fea8"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 9
+group = 1
+kind = "capsule"
+body = 7
+
+[[nodes.children]]
+id = "4631e7fc-c412-497a-ba4c-10c5078987cf"
+name = "thigh_left"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.009999999776482582,
+    0.0949999988079071,
+    0.6470000147819519,
+]
+rotation = [
+    -0.0147011149674654,
+    0.0,
+    0.0,
+    0.9998919367790222,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "b7bc201e-5ec8-458e-88a7-84c9d1744223"
+selected_variant = "5dca1f46-fbdc-4d7b-a268-7088a5ecd537"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "5dca1f46-fbdc-4d7b-a268-7088a5ecd537"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 10
+group = 1
+kind = "capsule"
+body = 8
+
+[[nodes.children]]
+id = "7c199e22-977a-4507-853f-8238651782d7"
+name = "shin_left"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.009999999776482582,
+    0.09000000357627869,
+    0.2669999897480011,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "4e651af1-f0b2-4413-aee7-efb5444ef0e2"
+selected_variant = "738155cf-8493-4769-bce5-c1baaabe00a6"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "738155cf-8493-4769-bce5-c1baaabe00a6"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 11
+group = 1
+kind = "capsule"
+body = 9
+
+[[nodes.children]]
+id = "707d5039-78bc-458e-b37f-42b8b25cdf02"
+name = "foot1_left"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.02500000037252903,
+    0.07000000029802322,
+    0.027000000700354576,
+]
+rotation = [
+    -0.06704015284776688,
+    -0.7039216160774231,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "7c373242-789f-47c3-be42-62e108826567"
+selected_variant = "4d8b4f45-15d6-4fb6-84a2-e3741988ad9b"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "4d8b4f45-15d6-4fb6-84a2-e3741988ad9b"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 12
+group = 1
+kind = "capsule"
+body = 10
+
+[[nodes.children]]
+id = "40fa4476-de8f-4140-a620-1e7546f26787"
+name = "foot2_left"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.02500000037252903,
+    0.10999999940395355,
+    0.027000000700354576,
+]
+rotation = [
+    0.06704015284776688,
+    -0.7039216160774231,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "7c373242-789f-47c3-be42-62e108826567"
+selected_variant = "200cd5c4-3e2b-402a-9d79-4b5fe513cb18"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "200cd5c4-3e2b-402a-9d79-4b5fe513cb18"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 13
+group = 1
+kind = "capsule"
+body = 10
+
+[[nodes.children]]
+id = "4011d822-c54d-47d6-9c1e-0f9f822ecfa5"
+name = "upper_arm_right"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.07999999821186066,
+    -0.25,
+    1.2619999647140503,
+]
+rotation = [
+    -0.32505759596824646,
+    -0.32505759596824646,
+    0.0,
+    0.8880738615989685,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "c30dc3e8-5696-4fe7-8bb2-81ca415b441c"
+selected_variant = "027e76db-5f22-4faa-92fa-eddeb71d5a9a"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "027e76db-5f22-4faa-92fa-eddeb71d5a9a"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 14
+group = 1
+kind = "capsule"
+body = 11
+
+[[nodes.children]]
+id = "154a539c-0fe9-4281-bb9c-cf046068de49"
+name = "lower_arm_right"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.27000001072883606,
+    -0.25999999046325684,
+    1.2519999742507935,
+]
+rotation = [
+    -0.6279630064964294,
+    0.6279630064964294,
+    0.0,
+    -0.4597008526325226,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "38149710-f6c4-4e5e-8df3-1de095ab533c"
+selected_variant = "94b65009-0e35-4cca-924e-ce994816eee3"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "94b65009-0e35-4cca-924e-ce994816eee3"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 15
+group = 1
+kind = "capsule"
+body = 12
+
+[[nodes.children]]
+id = "eb781d7d-4088-4979-acf2-2ff4f57930d9"
+name = "hand_right"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.36000001430511475,
+    -0.17000000178813934,
+    1.3420000076293945,
+]
+rotation = [
+    -0.32505759596824646,
+    0.32505759596824646,
+    0.0,
+    0.8880738615989685,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "3c3aafd8-d306-4678-9aa0-ed25d396ccb7"
+selected_variant = "1248f739-3ee9-42b6-a731-f79df87f6dd6"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "1248f739-3ee9-42b6-a731-f79df87f6dd6"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 16
+group = 1
+kind = "sphere"
+body = 13
+
+[[nodes.children]]
+id = "12a16c11-0304-4ae3-866a-578c9aa3a958"
+name = "upper_arm_left"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.07999999821186066,
+    0.25,
+    1.2619999647140503,
+]
+rotation = [
+    0.32505759596824646,
+    -0.32505759596824646,
+    0.0,
+    0.8880738615989685,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "c30dc3e8-5696-4fe7-8bb2-81ca415b441c"
+selected_variant = "5ccf7678-a206-460a-b5d7-0b55d691bb12"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "5ccf7678-a206-460a-b5d7-0b55d691bb12"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 17
+group = 1
+kind = "capsule"
+body = 14
+
+[[nodes.children]]
+id = "c218b88f-b0b9-4788-af38-c5962faf6ac1"
+name = "lower_arm_left"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.27000001072883606,
+    0.25999999046325684,
+    1.2519999742507935,
+]
+rotation = [
+    0.6279630064964294,
+    0.6279630064964294,
+    0.0,
+    -0.4597008526325226,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "38149710-f6c4-4e5e-8df3-1de095ab533c"
+selected_variant = "59b9bbd9-371b-41af-a854-f7f70231054f"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "59b9bbd9-371b-41af-a854-f7f70231054f"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 18
+group = 1
+kind = "capsule"
+body = 15
+
+[[nodes.children]]
+id = "1f69fb13-17f1-49e8-9d5d-d5c6bcb1be3e"
+name = "hand_left"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.36000001430511475,
+    0.17000000178813934,
+    1.3420000076293945,
+]
+rotation = [
+    0.32505759596824646,
+    0.32505759596824646,
+    0.0,
+    0.8880738615989685,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "3c3aafd8-d306-4678-9aa0-ed25d396ccb7"
+selected_variant = "1998884d-0fc6-42fe-a1ef-fc77a0b07ae0"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "1998884d-0fc6-42fe-a1ef-fc77a0b07ae0"
+name = "body"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "d1368d7f-7f95-4bdc-9b5c-c6678b6108a9"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "body"
+base_color = [
+    0.800000011920929,
+    0.6000000238418579,
+    0.4000000059604645,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.5
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 19
+group = 1
+kind = "sphere"
+body = 16

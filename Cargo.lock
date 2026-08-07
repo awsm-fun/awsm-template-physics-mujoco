@@ -252,6 +252,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "awsm-renderer-mujoco-format"
+version = "0.31.0"
+dependencies = [
+ "serde",
+]
+
+[[package]]
 name = "awsm-renderer-particles"
 version = "0.31.0"
 dependencies = [
@@ -264,6 +271,7 @@ dependencies = [
 name = "awsm-renderer-scene"
 version = "0.31.0"
 dependencies = [
+ "awsm-renderer-mujoco-format",
  "glam 0.32.1",
  "serde",
  "thiserror 2.0.19",
