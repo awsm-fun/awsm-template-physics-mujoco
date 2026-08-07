@@ -78,6 +78,14 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     set(&payload, "canvas", &offscreen);
     set(&payload, "origin", &JsValue::from_str(&base));
     set(&payload, "app_base", &JsValue::from_str(&app_base));
+    // Debug overlays are opt-in via the page URL, and only the main thread can
+    // read it — the render worker's own base is a `blob:`.
+    let contacts = window
+        .location()
+        .search()
+        .map(|s| s.contains("contacts"))
+        .unwrap_or(false);
+    set(&payload, "contacts", &JsValue::from_bool(contacts));
     let transfer = js_sys::Array::new();
     transfer.push(&offscreen);
 
@@ -180,7 +188,10 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     set(
         &init,
         "model_xml",
-        &JsValue::from_str(&format!("{}/mujoco/humanoid.xml", base.trim_end_matches('/'))),
+        &JsValue::from_str(&format!(
+            "{}/mujoco/humanoid.xml",
+            base.trim_end_matches('/')
+        )),
     );
     mujoco.post_message(&init)?;
     *mujoco_ref.borrow_mut() = Some(mujoco);
@@ -226,7 +237,11 @@ fn maybe_start(
             "kind",
             &JsValue::from_str("mujoco-model"),
         );
-        set(&model.clone().unchecked_into::<js_sys::Object>(), "sab", &sab);
+        set(
+            &model.clone().unchecked_into::<js_sys::Object>(),
+            "sab",
+            &sab,
+        );
         let _ = render.post_message(&model);
     }
     loading_log("pose block allocated — sim + mirror starting");
@@ -242,7 +257,11 @@ fn install_resize(
     let dpr = window.device_pixel_ratio().max(1.0);
     let render = render.clone();
     let cb = Closure::<dyn FnMut(js_sys::Array)>::new(move |entries: js_sys::Array| {
-        let Some(entry) = entries.get(0).dyn_into::<web_sys::ResizeObserverEntry>().ok() else {
+        let Some(entry) = entries
+            .get(0)
+            .dyn_into::<web_sys::ResizeObserverEntry>()
+            .ok()
+        else {
             return;
         };
         let rect = entry.content_rect();
@@ -268,32 +287,38 @@ fn install_pointer(canvas: &HtmlCanvasElement, render: Worker) -> Result<(), JsV
     let dragging = Rc::new(Cell::new(false));
     let last: Rc<Cell<(f32, f32)>> = Rc::new(Cell::new((0.0, 0.0)));
 
-    let down = Closure::<dyn FnMut(web_sys::PointerEvent)>::new(clone!(dragging, last => move |e: web_sys::PointerEvent| {
-        dragging.set(true);
-        last.set((e.client_x() as f32, e.client_y() as f32));
-    }));
+    let down = Closure::<dyn FnMut(web_sys::PointerEvent)>::new(
+        clone!(dragging, last => move |e: web_sys::PointerEvent| {
+            dragging.set(true);
+            last.set((e.client_x() as f32, e.client_y() as f32));
+        }),
+    );
     canvas.add_event_listener_with_callback("pointerdown", down.as_ref().unchecked_ref())?;
     down.forget();
 
-    let up = Closure::<dyn FnMut(web_sys::PointerEvent)>::new(clone!(dragging => move |_e: web_sys::PointerEvent| {
-        dragging.set(false);
-    }));
+    let up = Closure::<dyn FnMut(web_sys::PointerEvent)>::new(
+        clone!(dragging => move |_e: web_sys::PointerEvent| {
+            dragging.set(false);
+        }),
+    );
     canvas.add_event_listener_with_callback("pointerup", up.as_ref().unchecked_ref())?;
     canvas.add_event_listener_with_callback("pointercancel", up.as_ref().unchecked_ref())?;
     up.forget();
 
     let render_move = render.clone();
-    let mv = Closure::<dyn FnMut(web_sys::PointerEvent)>::new(clone!(dragging, last => move |e: web_sys::PointerEvent| {
-        if !dragging.get() {
-            return;
-        }
-        let (lx, ly) = last.get();
-        let (x, y) = (e.client_x() as f32, e.client_y() as f32);
-        last.set((x, y));
-        if let Ok(v) = serde_wasm_bindgen::to_value(&CameraMsg::Orbit { dx: x - lx, dy: y - ly }) {
-            let _ = render_move.post_message(&v);
-        }
-    }));
+    let mv = Closure::<dyn FnMut(web_sys::PointerEvent)>::new(
+        clone!(dragging, last => move |e: web_sys::PointerEvent| {
+            if !dragging.get() {
+                return;
+            }
+            let (lx, ly) = last.get();
+            let (x, y) = (e.client_x() as f32, e.client_y() as f32);
+            last.set((x, y));
+            if let Ok(v) = serde_wasm_bindgen::to_value(&CameraMsg::Orbit { dx: x - lx, dy: y - ly }) {
+                let _ = render_move.post_message(&v);
+            }
+        }),
+    );
     canvas.add_event_listener_with_callback("pointermove", mv.as_ref().unchecked_ref())?;
     mv.forget();
 

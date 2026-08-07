@@ -20,9 +20,16 @@ let timestep = 0.005;
 let ngeom = 0;
 
 // Pose block views (set on "start").
-let header = null; // Int32Array  [seq, steps, ngeom, reserved]
-let poses = null;  // Float32Array, 7 floats per geom after the header
+let header = null;   // Int32Array  [seq, steps, ngeom, ncon]
+let poses = null;    // Float32Array, 7 floats per geom after the header
+let contacts = null; // Float32Array, 6 floats per contact after the poses
 let steps_total = 0;
+
+// Must match protocol.rs. Contacts are a DEBUG overlay: the count varies every
+// step while the block is fixed-size, so the region is preallocated and the
+// live count rides in the header.
+const MAX_CONTACTS = 256;
+const CONTACT_STRIDE = 6;
 
 const post = (obj) => self.postMessage(obj);
 const progress = (message) => post({ kind: "progress", message: `mujoco: ${message}` });
@@ -82,7 +89,8 @@ async function init({ mujoco_js, mujoco_wasm, model_xml }) {
 
 function start(sab) {
     header = new Int32Array(sab);
-    poses = new Float32Array(sab, 4 * 4); // skip the 4-slot i32 header
+    poses = new Float32Array(sab, 4 * 4, ngeom * 7); // skip the 4-slot i32 header
+    contacts = new Float32Array(sab, (4 + ngeom * 7) * 4, MAX_CONTACTS * CONTACT_STRIDE);
     header[2] = ngeom;
     publish(); // the settled initial pose (mj_forward ran at init)
     progress("stepping");
@@ -115,8 +123,48 @@ function publish() {
         const o = g * 7;
         xposToPose(xpos, xmat, g, o);
     }
+    publishContacts();
     Atomics.store(header, 1, steps_total);
     Atomics.store(header, 0, header[0] + 1); // even — stable
+}
+
+// Contact points + normals, inside the SAME seqlock as the poses: an overlay
+// must never draw contacts from a different step than the bodies they touch.
+//
+// MuJoCo gives each contact a 3x3 frame whose FIRST ROW is the normal (rows 2
+// and 3 are the tangents), pointing from geom1 toward geom2.
+function publishContacts() {
+    const ncon = Math.min(data.ncon | 0, MAX_CONTACTS);
+    if (ncon === 0) {
+        Atomics.store(header, 3, 0);
+        return;
+    }
+    // `data.contact` is an embind binding, and embind exposes a sequence as
+    // EITHER an indexable value or a vector with .get(). Handle both, and
+    // release it if it owns wasm memory — this runs every published step, so a
+    // leaked vector here would be a slow-motion OOM.
+    const contact = data.contact;
+    const at = typeof contact.get === "function" ? (i) => contact.get(i) : (i) => contact[i];
+    let written = 0;
+    for (let c = 0; c < ncon; c++) {
+        const item = at(c);
+        if (!item) break;
+        const pos = item.pos;
+        const frame = item.frame;
+        const o = written * CONTACT_STRIDE;
+        contacts[o] = pos[0];
+        contacts[o + 1] = pos[1];
+        contacts[o + 2] = pos[2];
+        // MuJoCo's contact frame is a 3x3 whose FIRST ROW is the normal
+        // (rows 2-3 are the tangents), pointing from geom1 toward geom2.
+        contacts[o + 3] = frame[0];
+        contacts[o + 4] = frame[1];
+        contacts[o + 5] = frame[2];
+        written++;
+        if (typeof item.delete === "function") item.delete();
+    }
+    if (typeof contact.delete === "function") contact.delete();
+    Atomics.store(header, 3, written);
 }
 
 function xposToPose(xpos, xmat, g, o) {

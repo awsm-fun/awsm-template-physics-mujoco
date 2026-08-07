@@ -26,12 +26,15 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
-use glam::{Mat4, Vec3};
+use glam::{Mat4, Quat, Vec3};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 
-use crate::protocol::{CameraMsg, RenderMsg, ResizeMsg, POSE_HEADER, POSE_STRIDE};
+use crate::protocol::{
+    contact_offset, CameraMsg, RenderMsg, ResizeMsg, CONTACT_STRIDE, MAX_CONTACTS, POSE_HEADER,
+    POSE_STRIDE,
+};
 
 /// The boxed RAF callback, self-referenced so the render loop can reschedule
 /// itself each frame (and stays alive for the worker's lifetime).
@@ -92,6 +95,31 @@ struct SimLink {
     scratch: Vec<f32>,
     /// Last successfully-applied seq — skip work when nothing new published.
     last_seq: i32,
+    /// The contact-point debug overlay, when it was built.
+    contacts: Option<ContactOverlay>,
+}
+
+/// The contact-point overlay: a preallocated pool of spikes, one per possible
+/// contact, parented into the sim's own frame so contact positions apply as raw
+/// MuJoCo world coordinates — the same trick the geom nodes use.
+///
+/// DEV TOOLING. This is the only place in the whole feature where debug
+/// visualisation lives: the renderer, the editor and the bundle format never
+/// learn what a contact is. It exists here because this is the only side with
+/// live sim data.
+struct ContactOverlay {
+    /// f32 view over the block's contact region.
+    region: js_sys::Float32Array,
+    scratch: Vec<f32>,
+    /// One transform per pooled spike. The count varies every step and a
+    /// renderer cannot mint nodes per frame, so the pool is fixed and the
+    /// unused tail is hidden — the same shape the tendon channel uses.
+    spikes: Vec<(
+        awsm_renderer::transforms::TransformKey,
+        awsm_renderer::meshes::MeshKey,
+    )>,
+    /// How many spikes are currently shown, so visibility is edge-triggered.
+    shown: usize,
 }
 
 /// Worker entry: unpack the transferred `OffscreenCanvas` + page origin, build
@@ -123,6 +151,12 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
             format!("{base}/vendor/basis/basis_transcoder.js"),
         ));
     }
+    // Debug overlays are opt-in (`?contacts` in the page URL); main reads it,
+    // because this worker's own base is a `blob:` with no query at all.
+    let show_contacts = js_sys::Reflect::get(&payload, &JsValue::from_str("contacts"))
+        .ok()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let canvas_handle = canvas.clone();
     post_progress("render worker: requesting WebGPU device…");
     let gpu =
@@ -131,7 +165,7 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
         .with_device_request_limits(DeviceRequestLimits::max_all());
 
     wasm_bindgen_futures::spawn_local(async move {
-        if let Err(err) = run(gpu_builder, canvas_handle, origin).await {
+        if let Err(err) = run(gpu_builder, canvas_handle, origin, show_contacts).await {
             tracing::error!("render thread: {err:?}");
             post_to_main(&RenderMsg::Error {
                 message: format!("{err:?}"),
@@ -145,6 +179,7 @@ async fn run(
     gpu_builder: awsm_renderer::core::renderer::AwsmRendererWebGpuBuilder,
     canvas: web_sys::OffscreenCanvas,
     origin: String,
+    show_contacts: bool,
 ) -> Result<(), JsValue> {
     use awsm_renderer::camera::CameraParams;
     use awsm_renderer::AwsmRendererBuilder;
@@ -184,16 +219,20 @@ async fn run(
 
     let assets = awsm_renderer_scene_loader::assets::HttpAssets::new(bundle_base.clone());
     let mut last_phase_line = String::new();
-    let loaded =
-        awsm_renderer_scene_loader::load_scene_for_player(&mut renderer, &scene, &assets, |phase| {
+    let loaded = awsm_renderer_scene_loader::load_scene_for_player(
+        &mut renderer,
+        &scene,
+        &assets,
+        |phase| {
             let line = phase.label();
             if line != last_phase_line && !line.contains("0/0") {
                 post_progress(&line);
                 last_phase_line = line;
             }
-        })
-        .await
-        .map_err(|e| JsValue::from_str(&format!("load_scene_for_player: {e}")))?;
+        },
+    )
+    .await
+    .map_err(|e| JsValue::from_str(&format!("load_scene_for_player: {e}")))?;
 
     // The robot is authored content: the loader already resolved its
     // geom_id→transform binding out of the bundle. Nothing is built here.
@@ -245,6 +284,7 @@ async fn run(
         pending,
         camera.clone(),
         canvas.clone(),
+        show_contacts,
     )?;
     // Only now is the worker listening — main holds the model message until
     // this arrives.
@@ -311,24 +351,86 @@ fn apply_poses(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
     if seq0 != seq1 {
         return; // torn — writer was mid-publish
     }
+    let ncon = js_sys::Atomics::load(&m.header, 3).unwrap_or(0).max(0) as usize;
+    if let Some(overlay) = &mut m.contacts {
+        overlay.region.copy_to(&mut overlay.scratch[..]);
+    }
+    let seq1 = js_sys::Atomics::load(&m.header, 0).unwrap_or(-1);
+    if seq0 != seq1 {
+        return; // torn — writer was mid-publish
+    }
     m.last_seq = seq0;
     if let Err(err) =
         awsm_renderer_scene_loader::mujoco::apply_geom_poses(r, &m.instance, &m.scratch)
     {
         tracing::warn!("pose sink: {err}");
     }
+    if let Some(overlay) = &mut m.contacts {
+        overlay.apply(r, ncon);
+    }
 }
+
+impl ContactOverlay {
+    /// Place the live spikes and hide the rest.
+    fn apply(&mut self, r: &mut awsm_renderer::AwsmRenderer, ncon: usize) {
+        let live = ncon.min(self.spikes.len());
+        for (i, (tk, mk)) in self.spikes.iter().enumerate() {
+            if i < live {
+                let o = i * CONTACT_STRIDE;
+                let pos = Vec3::new(self.scratch[o], self.scratch[o + 1], self.scratch[o + 2]);
+                let normal = Vec3::new(
+                    self.scratch[o + 3],
+                    self.scratch[o + 4],
+                    self.scratch[o + 5],
+                );
+                // The spike mesh is built along +Y (meshgen's cylinder axis), so
+                // the contact normal only has to be rotated onto it. A
+                // degenerate normal would make `from_rotation_arc` produce NaN.
+                let rotation = if normal.length_squared() > 1e-9 {
+                    Quat::from_rotation_arc(Vec3::Y, normal.normalize())
+                } else {
+                    Quat::IDENTITY
+                };
+                let _ = r.transforms.set_local(
+                    *tk,
+                    awsm_renderer::transforms::Transform {
+                        // Pushed half a spike along the normal so the spike
+                        // stands ON the contact rather than straddling it.
+                        translation: pos + rotation * Vec3::new(0.0, SPIKE_LEN * 0.5, 0.0),
+                        rotation,
+                        scale: Vec3::ONE,
+                    },
+                );
+            }
+            // Only spikes crossing the show/hide boundary are touched: hiding a
+            // mesh re-syncs the spatial index, so re-asserting it every frame
+            // for 256 spikes would churn the BVH for nothing.
+            let was = i < self.shown;
+            let now = i < live;
+            if was != now {
+                let _ = r.set_mesh_hidden(*mk, !now);
+            }
+        }
+        self.shown = live;
+    }
+}
+
+/// Length of a contact spike, metres. Long enough to read at humanoid scale,
+/// short enough not to bury the model it is annotating.
+const SPIKE_LEN: f32 = 0.12;
 
 /// Install this worker's post-load `onmessage`: the forwarded MuJoCo model
 /// description (`kind: "mujoco-model"`), canvas resizes, and camera gestures.
 fn install_onmessage(
-    // Kept for the resize path's canvas ownership symmetry; the MuJoCo branch no
-    // longer touches the renderer at all, which is the point of the migration.
-    _cell: Rc<RefCell<awsm_renderer::AwsmRenderer>>,
+    // The pose path never touches the renderer here — that is the point of the
+    // migration — but the DEBUG overlay has to mint its own nodes, so the
+    // handle is back for that one job.
+    cell: Rc<RefCell<awsm_renderer::AwsmRenderer>>,
     mirror: Rc<RefCell<Option<SimLink>>>,
     pending: Rc<RefCell<Option<awsm_renderer_scene_loader::mujoco::MujocoInstance>>>,
     camera: Rc<RefCell<OrbitCamera>>,
     canvas: web_sys::OffscreenCanvas,
+    show_contacts: bool,
 ) -> Result<(), JsValue> {
     let scope = js_sys::global().unchecked_into::<web_sys::DedicatedWorkerGlobalScope>();
     let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
@@ -354,11 +456,10 @@ fn install_onmessage(
                 .model_name
                 .clone()
                 .unwrap_or_else(|| instance.source.filename.clone());
-            match link_sim(instance, &data) {
+            let mut r = cell.borrow_mut();
+            match link_sim(&mut r, instance, &data, show_contacts) {
                 Ok(m) => {
-                    tracing::info!(
-                        "render thread: driving {label} — {bound}/{total} geoms bound"
-                    );
+                    tracing::info!("render thread: driving {label} — {bound}/{total} geoms bound");
                     post_progress(&format!("sim linked ({bound}/{total} geoms) — running"));
                     *mirror.borrow_mut() = Some(m);
                 }
@@ -400,8 +501,10 @@ fn install_onmessage(
 /// collectively nonsense, which is close to undiagnosable, so a mismatch
 /// refuses to bind rather than driving the wrong robot.
 fn link_sim(
+    r: &mut awsm_renderer::AwsmRenderer,
     instance: awsm_renderer_scene_loader::mujoco::MujocoInstance,
     data: &JsValue,
+    show_contacts: bool,
 ) -> Result<SimLink, JsValue> {
     let get = |key: &str| js_sys::Reflect::get(data, &JsValue::from_str(key));
     let ngeom = get("ngeom")?.as_f64().unwrap_or(0.0) as usize;
@@ -418,14 +521,91 @@ fn link_sim(
     // own recorded hash is what is available on this side of the SAB.
     let sab = get("sab")?;
     let header = js_sys::Int32Array::new(&sab);
-    let poses = js_sys::Float32Array::new(&sab)
-        .subarray(POSE_HEADER as u32, (POSE_HEADER + ngeom * POSE_STRIDE) as u32);
+    let poses = js_sys::Float32Array::new(&sab).subarray(
+        POSE_HEADER as u32,
+        (POSE_HEADER + ngeom * POSE_STRIDE) as u32,
+    );
+    tracing::info!(
+        "contact overlay: requested={show_contacts} root_transform={:?}",
+        instance.root_transform.is_some()
+    );
+    let contacts = match (show_contacts, instance.root_transform) {
+        (true, Some(root)) => match build_contact_overlay(r, &sab, ngeom, root) {
+            Ok(o) => Some(o),
+            Err(err) => {
+                // A debug overlay is never worth failing the run for.
+                tracing::warn!("contact overlay: {err:?} — continuing without it");
+                None
+            }
+        },
+        (true, None) => {
+            tracing::warn!("contact overlay: the sim instance has no resolved root transform");
+            None
+        }
+        (false, _) => None,
+    };
     Ok(SimLink {
         instance,
         header,
         poses,
         scratch: vec![0.0; ngeom * POSE_STRIDE],
         last_seq: 0,
+        contacts,
+    })
+}
+
+/// Mint the contact-spike pool, parented under the sim instance's root so
+/// contact positions can be written as raw MuJoCo world coordinates.
+fn build_contact_overlay(
+    r: &mut awsm_renderer::AwsmRenderer,
+    sab: &JsValue,
+    ngeom: usize,
+    root: awsm_renderer::transforms::TransformKey,
+) -> Result<ContactOverlay, JsValue> {
+    let mut pbr = awsm_renderer::materials::pbr::PbrMaterial::new(
+        awsm_renderer::materials::MaterialAlphaMode::Opaque,
+        false,
+    );
+    // Unlit-bright red: an overlay should never be mistaken for scene geometry
+    // that happens to be lit oddly.
+    pbr.base_color_factor = [1.0, 0.1, 0.05, 1.0];
+    pbr.emissive_factor = [0.8, 0.05, 0.0];
+    pbr.metallic_factor = 0.0;
+    pbr.roughness_factor = 1.0;
+    let material = r.materials.insert(
+        awsm_renderer::materials::Material::Pbr(Box::new(pbr)),
+        &r.textures,
+        &r.dynamic_materials,
+        &r.extras_pool,
+    );
+
+    let mut spikes = Vec::with_capacity(MAX_CONTACTS);
+    for i in 0..MAX_CONTACTS {
+        let tk = r
+            .transforms
+            .insert(awsm_renderer::transforms::Transform::default(), Some(root));
+        // meshgen's cylinder runs along +Y, which is exactly the axis
+        // `ContactOverlay::apply` rotates the contact normal onto.
+        let mesh = awsm_renderer_scene_loader::mesh_data_to_raw(
+            awsm_renderer_meshgen::cylinder_mesh(0.012, SPIKE_LEN, 8),
+        );
+        let mk = r
+            .add_raw_mesh(mesh, tk, material)
+            .map_err(|e| JsValue::from_str(&format!("contact spike {i}: {e}")))?;
+        // The pool starts empty: every spike is hidden until a step reports it.
+        r.set_mesh_hidden(mk, true)
+            .map_err(|e| JsValue::from_str(&format!("contact spike {i}: {e}")))?;
+        spikes.push((tk, mk));
+    }
+
+    let start = contact_offset(ngeom);
+    let region = js_sys::Float32Array::new(sab)
+        .subarray(start as u32, (start + MAX_CONTACTS * CONTACT_STRIDE) as u32);
+    Ok(ContactOverlay {
+        region,
+        scratch: vec![0.0; MAX_CONTACTS * CONTACT_STRIDE],
+        spikes,
+        shown: 0,
     })
 }
 

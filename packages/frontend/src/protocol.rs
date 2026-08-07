@@ -19,10 +19,27 @@
 //! i32[0]  seq        seqlock: writer makes it ODD, writes poses, makes it EVEN
 //! i32[1]  steps      total sim steps published (monotonic; readers may show it)
 //! i32[2]  ngeom
-//! i32[3]  reserved
+//! i32[3]  ncon       LIVE contact count this frame, capped at MAX_CONTACTS
 //! f32[4 + g*7 + 0..3]  geom g world position  (MuJoCo frame, metres)
 //! f32[4 + g*7 + 3..7]  geom g world rotation  (quaternion, glam order x,y,z,w)
+//! f32[C + c*6 + 0..3]  contact c world position  (MuJoCo frame, metres)
+//! f32[C + c*6 + 3..6]  contact c world NORMAL    (unit, MuJoCo frame)
+//!     where C = 4 + ngeom*7
 //! ```
+//!
+//! ## The contact region is a DEBUG overlay
+//!
+//! Contacts are dev tooling and live only in this template — never in the
+//! renderer, the editor, or a bundle. They are published in the same seqlock as
+//! the poses so an overlay can never draw contacts from a different step than
+//! the bodies they belong to.
+//!
+//! The count varies every step while the block must be a fixed size, so the
+//! region is preallocated to [`MAX_CONTACTS`] and the live count rides in the
+//! header — the same shape the renderer's tendon channel uses, and for the same
+//! reason. A step with more contacts than the cap publishes the first
+//! `MAX_CONTACTS`; that is a visualisation losing detail, not the sim losing
+//! anything.
 //!
 //! All values little-endian f32/i32; MuJoCo's f64 state is narrowed to f32 by
 //! the worker, so the f64 question never reaches the renderer. The seqlock is
@@ -37,22 +54,41 @@ pub const POSE_STRIDE: usize = 7;
 /// i32/f32 header slots before the pose span.
 pub const POSE_HEADER: usize = 4;
 
-/// Byte size of the pose block for `ngeom` geoms.
+/// f32 slots per contact in the debug region: world position + unit normal.
+pub const CONTACT_STRIDE: usize = 6;
+
+/// How many contacts the block reserves room for.
+///
+/// A humanoid on the ground runs a handful; a pile of objects can spike. This
+/// caps the overlay's cost (and the block at ~6 KB) without ever throttling the
+/// sim, which does not know the overlay exists.
+pub const MAX_CONTACTS: usize = 256;
+
+/// f32 index where the contact region starts, for `ngeom` geoms.
+pub fn contact_offset(ngeom: usize) -> usize {
+    POSE_HEADER + ngeom * POSE_STRIDE
+}
+
+/// Byte size of the pose block for `ngeom` geoms, including the contact region.
 pub fn pose_block_bytes(ngeom: usize) -> usize {
-    (POSE_HEADER + ngeom * POSE_STRIDE) * 4
+    (contact_offset(ngeom) + MAX_CONTACTS * CONTACT_STRIDE) * 4
 }
 
 /// Render-worker → main messages (loading progress + lifecycle).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum RenderMsg {
     /// Human-readable loading-screen line.
-    Progress { message: String },
+    Progress {
+        message: String,
+    },
     /// The scene bundle is loaded + committed; safe to forward the MuJoCo
     /// model description (before this, the worker's onmessage isn't listening).
     SceneReady,
     /// First real frames have been presented.
     Ready,
-    Error { message: String },
+    Error {
+        message: String,
+    },
 }
 
 /// Main → render worker: canvas backing-store resize (device pixels).
