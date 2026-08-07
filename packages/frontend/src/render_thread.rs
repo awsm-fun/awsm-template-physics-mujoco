@@ -383,11 +383,14 @@ impl ContactOverlay {
                     self.scratch[o + 4],
                     self.scratch[o + 5],
                 );
-                // NOTE: `self.scratch[o + 6]` carries this contact's normal
-                // force in newtons. Scaling the spike by it is the obvious next
-                // step and is NOT done here yet — see the plan's log. The force
-                // is on the wire and verified arriving; only the visual is
-                // outstanding.
+                // Force sets the spike's LENGTH, which is what turns a
+                // contact-point overlay into a force overlay: a foot bearing
+                // weight grows a long spike, a grazing touch keeps a stub.
+                // Clamped at both ends — a zero-force contact still has to be
+                // visible, and a landing impact must not skewer the scene.
+                let force = self.scratch[o + 6];
+                let len = (SPIKE_MIN + (force / FORCE_REF) * (SPIKE_MAX - SPIKE_MIN))
+                    .clamp(SPIKE_MIN, SPIKE_MAX);
                 // The spike mesh is built along +Y (meshgen's cylinder axis), so
                 // the contact normal only has to be rotated onto it. A
                 // degenerate normal would make `from_rotation_arc` produce NaN.
@@ -401,9 +404,13 @@ impl ContactOverlay {
                     awsm_renderer::transforms::Transform {
                         // Pushed half a spike along the normal so the spike
                         // stands ON the contact rather than straddling it.
-                        translation: pos + rotation * Vec3::new(0.0, SPIKE_LEN * 0.5, 0.0),
+                        translation: pos + rotation * Vec3::new(0.0, len * 0.5, 0.0),
                         rotation,
-                        scale: Vec3::ONE,
+                        // Y only: the RADIUS stays constant so a light contact
+                        // is a short spike, not an invisible hair. Scaling all
+                        // three axes shrank a 25 N contact to about one pixel
+                        // wide, which reads as "the overlay is broken".
+                        scale: Vec3::new(1.0, len / SPIKE_MAX, 1.0),
                     },
                 );
             }
@@ -420,9 +427,20 @@ impl ContactOverlay {
     }
 }
 
-/// Length of a contact spike, metres. Long enough to read at humanoid scale,
-/// short enough not to bury the model it is annotating.
-const SPIKE_LEN: f32 = 0.12;
+/// Contact spike length at zero force, metres — a contact carrying nothing is
+/// still a contact and still has to be visible.
+const SPIKE_MIN: f32 = 0.06;
+/// Contact spike length at [`FORCE_REF`] and above, metres. Long enough to read
+/// at humanoid scale, short enough not to bury the model it is annotating.
+const SPIKE_MAX: f32 = 0.35;
+/// The normal force, newtons, that draws a full-length spike.
+///
+/// Calibrated against the humanoid rather than guessed: at rest its contacts
+/// carry 20-175 N each, and landing spikes to ~3600 N. Referencing the whole
+/// body weight (400 N) put every resting contact within a hair of the minimum
+/// and made the overlay look dead, so this sits inside the resting band and
+/// lets impacts saturate.
+const FORCE_REF: f32 = 150.0;
 
 /// Install this worker's post-load `onmessage`: the forwarded MuJoCo model
 /// description (`kind: "mujoco-model"`), canvas resizes, and camera gestures.
@@ -592,7 +610,7 @@ fn build_contact_overlay(
         // meshgen's cylinder runs along +Y, which is exactly the axis
         // `ContactOverlay::apply` rotates the contact normal onto.
         let mesh = awsm_renderer_scene_loader::mesh_data_to_raw(
-            awsm_renderer_meshgen::cylinder_mesh(0.012, SPIKE_LEN, 8),
+            awsm_renderer_meshgen::cylinder_mesh(0.012, SPIKE_MAX, 8),
         );
         let mk = r
             .add_raw_mesh(mesh, tk, material)
