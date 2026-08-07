@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "awsm-audio": {
+      "type": "http",
+      "url": "http://127.0.0.1:9171/mcp"
+    },
+    "awsm-scene": {
+      "type": "http",
+      "url": "http://127.0.0.1:9086/mcp"
+    }
+  }
+}

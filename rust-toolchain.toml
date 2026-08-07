@@ -1,0 +1,8 @@
+# The threaded wasm profile needs nightly + `rust-src` for `-Z build-std`,
+# which recompiles `std` with `+atomics,+bulk-memory` so a SHARED
+# `WebAssembly.Memory` works (stable std has no atomics). See Taskfile.yml
+# (RUSTFLAGS + build-std) and Trunk.toml (COOP/COEP).
+[toolchain]
+channel = "nightly"
+components = ["rust-src"]
+targets = ["wasm32-unknown-unknown"]

@@ -1,0 +1,33 @@
+// Zed project settings: point rust-analyzer at the THREADED wasm profile
+// (the same flags as `task check` in Taskfile.yml). Without this, it
+// analyzes the host target against a prebuilt std and floods the editor
+// with errors — `#![feature(stdarch_wasm_atomic_wait)]`, the missing
+// `core::arch::wasm32` atomics intrinsics, web-sys unstable APIs, etc.
+// Nightly itself comes from rust-toolchain.toml (rustup picks it up).
+{
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": {
+        "cargo": {
+          // The only target this workspace builds for.
+          "target": "wasm32-unknown-unknown",
+          "allTargets": false,
+          // Keep rust-analyzer's artifacts in target/rust-analyzer so its
+          // background checks don't fight `task dev` builds for the
+          // build-dir lock.
+          "targetDir": true,
+          "extraEnv": {
+            // Taskfile.yml's THREADED_RUSTFLAGS minus the link-only args
+            // (rust-analyzer checks, it never links). An env RUSTFLAGS
+            // REPLACES .cargo/config.toml's rustflags, so the two base cfgs
+            // are repeated here — keep all three places in sync.
+            "RUSTFLAGS": "--cfg=web_sys_unstable_apis --cfg=getrandom_backend=\"wasm_js\" -C target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128",
+            // Recompile std with atomics — the shipped wasm std has none,
+            // and the atomics intrinsics don't exist without it.
+            "CARGO_UNSTABLE_BUILD_STD": "std,panic_abort"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,84 @@
+# Virtual workspace root — the crates live under packages/:
+#   frontend — the demo (main/render threads + a JS MuJoCo physics worker);
+#              Trunk builds it from packages/frontend
+#
+# All dependency versions live HERE in [workspace.dependencies]; each member
+# pulls what it needs with `dep.workspace = true`.
+#
+# NOTE (development): the awsm-renderer crates are pinned to LOCAL PATHS in the
+# sibling renderer checkout (../../renderer) so renderer-side work and this
+# template iterate together. Switch back to crates.io versions for release.
+[workspace]
+resolver = "2"
+members = [
+    "packages/frontend",
+]
+
+[workspace.package]
+version = "0.1.0"
+authors = ["David Komer"]
+edition = "2021"
+license = "MIT OR Apache-2.0"
+publish = false
+
+[workspace.dependencies]
+# ── The renderer + the player-bundle loader ─────────────────────────────────
+# The complete direct dependency surface for a PLAYER — render + load:
+#   awsm-renderer              the renderer (re-exports the WebGPU builder as
+#                              `awsm_renderer::core`, so no direct -core dep)
+#   awsm-renderer-scene        the runtime `Scene` type + `scene.toml` deserializer
+#   awsm-renderer-scene-loader the player load path (`load_scene_for_player`) a
+#                              shipped game uses; also re-exports the Basis KTX2
+#                              transcoder config as `scene_loader::basis`.
+#   awsm-renderer-meshgen      runtime primitive meshes (sphere/box/cylinder/…)
+#                              for mirroring MuJoCo geoms that have no bundle
+#                              asset.
+awsm-renderer = { path = "../../renderer/packages/crates/renderer" }
+awsm-renderer-scene = { path = "../../renderer/packages/crates/scene" }
+awsm-renderer-scene-loader = { path = "../../renderer/packages/crates/scene-loader", features = ["http"] }
+awsm-renderer-meshgen = { path = "../../renderer/packages/crates/meshgen" }
+
+# ── DOM, driven from pure Rust ──────────────────────────────────────────────
+# NOTE: the published dominator 0.5.38 is incompatible with
+# `web_sys_unstable_apis` — see [patch.crates-io] below.
+dominator = "0.5.38"
+futures = "0.3"
+futures-signals = "0.3"
+
+# ── glue ────────────────────────────────────────────────────────────────────
+# Pinned to one internally-consistent wasm-bindgen / web-sys / js-sys set (the
+# -sys crates `=`-pin their wasm-bindgen, so these four move together). It must
+# stay semver-compatible with the ranges the local awsm-renderer declares, and
+# match the wasm-bindgen-cli trunk drives. glam is kept at the renderer's 0.32:
+# glam types cross the renderer API boundary, so a mismatched major would fail
+# to type-check.
+glam = "0.32"
+gloo-net = { version = "0.7", features = ["http"] }
+wasm-bindgen = "=0.2.126"
+wasm-bindgen-futures = "=0.4.76"
+js-sys = "=0.3.103"
+web-sys = "=0.3.103"
+serde = { version = "1", features = ["derive"] }
+serde-wasm-bindgen = "0.6"
+toml = "1"
+tracing = "0.1"
+tracing-web = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# Optimize *dependencies* even in dev builds — the renderer does heavy per-frame
+# work that is unusably slow at opt-level 0. Our own crates stay at opt-level 0
+# for fast, debuggable incremental rebuilds.
+[profile.dev.package."*"]
+opt-level = 3
+
+# Smaller, faster wasm in release (the bundle is multi-MB before this).
+[profile.release]
+opt-level = "s"
+lto = true
+codegen-units = 1
+
+# dominator 0.5.38 (crates.io) won't compile under `web_sys_unstable_apis` — the
+# upstream git rev fixes the `f64` coord types. Same rev awsm-renderer pins.
+# Remove this once a fixed dominator is published to crates.io.
+[patch.crates-io]
+dominator = { git = "https://github.com/Pauan/rust-dominator", rev = "25597cd" }

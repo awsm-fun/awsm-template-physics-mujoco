@@ -1,0 +1,87 @@
+name: Deploy to GitHub Pages
+
+# Builds the threaded wasm bundle and publishes dist/ to GitHub Pages on every
+# merge to main. The COOP/COEP headers this build needs can't be sent by Pages,
+# so a coi-serviceworker shim (index.html) re-imposes them client-side.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Pages deploy needs an OIDC token + write access to the Pages environment.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; let an in-flight deploy finish rather than cancel it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+      # vendor/box3d is a git submodule — box3d-sys compiles it into the bundle
+      # (ubuntu's stock clang has the wasm backend).
+      - uses: actions/checkout@v6
+        with:
+          submodules: true
+
+      # Nightly + rust-src: threaded wasm build recompiles std with atomics via
+      # `-Z build-std` (see rust-toolchain.toml / Taskfile.yml).
+      - name: Install Rust (nightly)
+        uses: dtolnay/rust-toolchain@nightly
+        with:
+          targets: wasm32-unknown-unknown
+          components: rust-src
+
+      - name: Install Trunk
+        uses: jetli/trunk-action@v0.5.0
+        with:
+          version: latest
+
+      - name: Install Task
+        uses: arduino/setup-task@v2
+        with:
+          version: 3.x
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: "single-player-game-physics"
+          cache-on-failure: true
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+
+      # Project sites are served from "/<repo>/", so the asset base must match.
+      - name: Build (threaded wasm)
+        run: task build PUBLIC_URL="/${{ github.event.repository.name }}/"
+
+      # Stop Pages' Jekyll from touching the wasm-bindgen output.
+      - name: Disable Jekyll
+        run: touch dist/.nojekyll
+
+      - name: Upload artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: dist
+
+  deploy:
+    name: Deploy
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

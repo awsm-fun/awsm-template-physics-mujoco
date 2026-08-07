@@ -1,0 +1,138 @@
+<!doctype html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>physics-mujoco — Awsm · MuJoCo · wasm threads</title>
+
+    <!-- COOP/COEP shim for static hosts (GitHub Pages) that can't send the
+         headers `crossOriginIsolated` needs. Must run before the wasm bundle.
+         No-op when the server already isolates the page (Trunk / `task dev`).
+         The matching `copy-file` below lands it at the site root. -->
+    <script src="coi-serviceworker.js"></script>
+    <link data-trunk rel="copy-file" href="coi-serviceworker.js" />
+
+    <style>
+        html, body { margin: 0; padding: 0; height: 100%; background: #0b0d12; color: #cdd3e0; font-family: system-ui, sans-serif; overflow: hidden; }
+        /* The DOM (canvas + HUD) is built from Rust with Dominator — see
+           src/main_thread.rs. These classes are the styling hooks it uses. */
+        .canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
+        .hud { position: fixed; top: 10px; left: 12px; font-size: 13px; line-height: 1.5; white-space: pre; opacity: 0.85; pointer-events: none; }
+        .hud .key { color: #7fd1ff; }
+        /* Worker-stats panel (top right), driven from src/main_thread.rs.
+           Hidden by default; the bottom-left Stats chip toggles it. */
+        .stats { position: fixed; top: 10px; right: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; white-space: pre; text-align: left; color: #9fb4d8; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 8px; padding: 8px 12px; pointer-events: none; backdrop-filter: blur(4px); }
+        .stats-btn { position: fixed; bottom: 18px; left: 16px; z-index: 5; font: inherit; font-size: 12px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 18px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
+        .stats-btn:hover { background: rgba(20, 30, 48, 0.75); border-color: rgba(127, 209, 255, 0.45); }
+        .stats-btn.active { background: rgba(20, 30, 48, 0.85); border-color: rgba(127, 209, 255, 0.6); color: #e8edf7; }
+        /* The sync line turns red when render/physics sync is genuinely bad
+           (persistent large error with the jitter buffer maxed out). */
+        .stats .sync-bad { color: #ff6a5e; font-weight: 700; }
+
+        /* ── Settings button + modal (graphics controls, src/main_thread.rs) ─
+           Bottom-right pill opens a modal with the resolution slider (the
+           fill-rate lever) + MSAA / SMAA toggles. */
+        .settings-btn { position: fixed; bottom: 18px; right: 16px; z-index: 5; font: inherit; font-size: 12px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 18px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
+        .settings-btn:hover { background: rgba(20, 30, 48, 0.75); border-color: rgba(127, 209, 255, 0.45); }
+        .settings-overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(4, 6, 10, 0.6); backdrop-filter: blur(3px); }
+        .settings-modal { position: relative; width: min(360px, 86vw); margin: 20px; padding: 22px 26px; color: #cfe0f5; background: rgba(13, 18, 28, 0.96); border: 1px solid rgba(127, 209, 255, 0.22); border-radius: 12px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5); }
+        .settings-modal h2 { margin: 0 0 16px; font-size: 16px; letter-spacing: 0.05em; color: #e8edf7; text-align: center; }
+        .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0; }
+        .settings-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: #b9c6dd; }
+        .settings-row .res-slider { width: 150px; accent-color: #7fd1ff; cursor: pointer; }
+        .settings-toggle { width: 18px; height: 18px; accent-color: #7fd1ff; cursor: pointer; }
+        .settings-hint { margin: 16px 0 0; font-size: 11.5px; line-height: 1.5; color: #8fa3c4; }
+        /* One-time reduced-quality notice (touch devices); shares the settings
+           modal chrome, plus its own body text + OK button. */
+        .notice-text { margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #b9c6dd; }
+        .notice-ok { display: block; margin: 0 auto; font: inherit; font-size: 13px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(20, 30, 48, 0.75); border: 1px solid rgba(127, 209, 255, 0.45); border-radius: 999px; padding: 7px 28px; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
+        .notice-ok:hover { background: rgba(30, 44, 68, 0.9); border-color: #7fd1ff; }
+
+        /* ── About button + modal ─────────────────────────────────────────── */
+        .about-btn { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); font: inherit; font-size: 13px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 22px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
+        .about-btn:hover { background: rgba(20, 30, 48, 0.75); border-color: rgba(127, 209, 255, 0.45); }
+        .about-overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(4, 6, 10, 0.6); backdrop-filter: blur(3px); }
+        .about-modal { position: relative; max-width: 480px; margin: 20px; padding: 24px 28px; color: #cfe0f5; font-size: 14px; line-height: 1.65; background: rgba(13, 18, 28, 0.96); border: 1px solid rgba(127, 209, 255, 0.22); border-radius: 12px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5); }
+        .about-modal h2 { margin: 0 0 14px; font-size: 17px; letter-spacing: 0.05em; color: #e8edf7; text-align: center; }
+        .about-modal p { margin: 0 0 12px; }
+        .about-modal ul { margin: 0 0 12px; padding-left: 20px; }
+        .about-modal li { margin: 3px 0; }
+        .about-modal a { color: #7fd1ff; text-decoration: none; border-bottom: 1px solid rgba(127, 209, 255, 0.35); }
+        .about-modal a:hover { border-bottom-color: #7fd1ff; }
+        .about-repo { margin-top: 16px; font-size: 15px; }
+        .about-footer { margin: 14px 0 0; font-size: 12.5px; color: #8fa3c4; text-align: center; }
+        .about-footer::before { content: ""; display: block; margin: 0 auto 12px; width: 60px; border-top: 1px solid rgba(127, 209, 255, 0.18); }
+        .about-close { position: absolute; top: 10px; right: 12px; font-size: 20px; line-height: 1; color: #9fb4d8; background: none; border: none; cursor: pointer; padding: 4px 8px; }
+        .about-close:hover { color: #e8edf7; }
+
+        /* ── Loading screen ─────────────────────────────────────────────────
+           Present in the static HTML so it shows the moment the page arrives
+           (while the wasm is still downloading/compiling). Rust appends
+           progress lines to #loading-log and removes the overlay on Ready. */
+        #loading { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 22px; background: radial-gradient(120% 120% at 50% 20%, #141a26 0%, #0b0d12 60%, #06070a 100%); transition: opacity 0.5s ease; }
+        #loading.done { opacity: 0; pointer-events: none; }
+        #loading .title { font-size: 20px; letter-spacing: 0.14em; text-transform: uppercase; color: #e8edf7; text-align: center; line-height: 1.5; }
+        #loading .title b { color: #ff6a5e; font-weight: 600; }
+        #loading .subtitle { display: block; margin-top: 6px; font-size: 13px; letter-spacing: 0.3em; color: #7f8ba1; }
+        #loading .orb { width: 46px; height: 46px; border-radius: 50%; background: radial-gradient(circle at 32% 30%, #ffffff 0%, #b8c4d6 18%, #2a3242 70%, #0b0d12 100%); box-shadow: 0 0 24px rgba(127, 209, 255, 0.35); animation: loading-bounce 1.1s cubic-bezier(0.28, 0, 0.55, 1) infinite alternate; }
+        @keyframes loading-bounce { from { transform: translateY(-16px) scale(1); } to { transform: translateY(10px) scale(0.94, 1.06); } }
+        #loading-log { width: min(620px, 86vw); height: 200px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.6; color: #7f8ba1; mask-image: linear-gradient(to bottom, transparent 0%, black 35%); }
+        #loading-log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        #loading-log div:last-child { color: #b9e3ff; }
+    </style>
+</head>
+<body>
+    <div id="loading">
+        <div class="orb"></div>
+        <div class="title">
+            <div><b>Awsm</b> Renderer</div>
+            <div><b>MuJoCo</b> Physics</div>
+            <span class="subtitle">wasm threads</span>
+        </div>
+        <div id="loading-log"><div>loading code… (fetching + compiling the wasm bundle)</div></div>
+    </div>
+    <!-- wasm-opt is disabled (data-wasm-opt="0"): the threaded build emits
+         atomics + bulk-memory + a shared-memory import, which the wasm-opt
+         Trunk bundles can silently strip. Keeping it off preserves the
+         shared-memory bootstrap. -->
+    <link data-trunk rel="rust" data-wasm-opt="0" />
+
+    <!-- Vendored Basis TRANSCODER + its worker (runtime KTX2/BasisU texture
+         load — the editor bakes material textures as Basis-supercompressed
+         KTX2 by default). The codec crate has NO built-in URLs: the frontend
+         provides them via `configure(BasisWorkerConfig::player(worker_url,
+         transcoder_url))` (see render_thread.rs), pointing at these copied
+         files — served same-origin at the APP origin (COEP require-corp demands
+         it anyway; the render worker builds ABSOLUTE URLs from that origin
+         since its own base is `blob:`). Change the paths below and the two
+         `format!` URLs in render_thread.rs together. The ENCODER is editor-only
+         — never ship it in a player. See web/vendor/basis/. -->
+    <link data-trunk rel="copy-file" href="../../web/vendor/basis/basis_transcoder.js" data-target-path="vendor/basis" />
+    <link data-trunk rel="copy-file" href="../../web/vendor/basis/basis_transcoder.wasm" data-target-path="vendor/basis" />
+    <link data-trunk rel="copy-file" href="../../web/workers/basis-worker.js" data-target-path="workers" />
+
+    <!-- Bundle the editor-exported scene SAME-ORIGIN. COEP `require-corp`
+         blocks cross-origin fetches, so the render worker must load the scene
+         from our own origin. `media/bundle` is the scene editor's player
+         export — `scene.toml` (table + walls + ball, with collider nodes the
+         physics thread derives its Box3D world from) plus its `assets/`
+         (environment KTX2 cubemaps, PBR textures, and any imported-mesh
+         glbs). copy-dir serves the whole export at `/bundle/...`; the render
+         worker fetches `bundle/scene.toml`, then its `HttpAssets` pulls
+         `bundle/assets/<id>.ktx2|png|...` on demand as the player loader
+         requests them. -->
+    <link data-trunk rel="copy-dir" href="../../media/bundle" />
+
+    <!-- The official MuJoCo wasm build (@mujoco/mujoco on npm, vendored — an
+         Emscripten ES module + its .wasm), plus our physics worker that hosts
+         it. Served same-origin (COEP require-corp). The worker is a MODULE
+         worker: it dynamic-imports mujoco.js and resolves mujoco.wasm next to
+         it via `locateFile`. -->
+    <link data-trunk rel="copy-file" href="../../web/vendor/mujoco/mujoco.js" data-target-path="vendor/mujoco" />
+    <link data-trunk rel="copy-file" href="../../web/vendor/mujoco/mujoco.wasm" data-target-path="vendor/mujoco" />
+    <link data-trunk rel="copy-file" href="../../web/workers/mujoco-worker.js" data-target-path="workers" />
+
+    <!-- The MuJoCo scene (MJCF XML) the physics worker loads — the classic
+         DeepMind humanoid (Apache-2.0, from google-deepmind/mujoco). -->
+    <link data-trunk rel="copy-dir" href="../../media/mujoco" />
+</body>
+</html>

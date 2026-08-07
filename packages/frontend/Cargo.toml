@@ -1,0 +1,80 @@
+[package]
+name = "physics-mujoco-frontend"
+description = "Template: drive an awsm-renderer scene from MuJoCo physics running as the official @mujoco/mujoco wasm module in a web worker."
+version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[lib]
+# `cdylib` is what Trunk/wasm-bindgen consume; `rlib` keeps it unit-testable.
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# ── The renderer + the player-bundle loader ──────────────────────────────────
+awsm-renderer.workspace = true
+awsm-renderer-scene.workspace = true
+awsm-renderer-scene-loader.workspace = true
+awsm-renderer-meshgen.workspace = true
+
+# ── DOM, driven from pure Rust ───────────────────────────────────────────────
+dominator.workspace = true
+futures.workspace = true
+futures-signals.workspace = true
+
+# ── glue ─────────────────────────────────────────────────────────────────────
+glam.workspace = true
+gloo-net.workspace = true
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
+serde.workspace = true
+serde-wasm-bindgen.workspace = true
+tracing.workspace = true
+tracing-web.workspace = true
+tracing-subscriber.workspace = true
+
+[dependencies.web-sys]
+workspace = true
+features = [
+    "console",
+    "Window",
+    "Document",
+    "Event",
+    "EventTarget",
+    "Element",
+    "HtmlElement",
+    "HtmlCanvasElement",
+    "HtmlInputElement",
+    "OffscreenCanvas",
+    "Location",
+    "UrlSearchParams",
+    "Storage",
+    "MediaQueryList",
+    "Gpu",
+    "GpuAdapter",
+    "GpuAdapterInfo",
+    "GpuSupportedLimits",
+    "Navigator",
+    "WorkerNavigator",
+    "WorkerGlobalScope",
+    "DedicatedWorkerGlobalScope",
+    "Worker",
+    "WorkerOptions",
+    "WorkerType",
+    "MessageEvent",
+    "ErrorEvent",
+    "Blob",
+    "BlobPropertyBag",
+    "Url",
+    "KeyboardEvent",
+    "MouseEvent",
+    "ResizeObserver",
+    "ResizeObserverEntry",
+    "DomRectReadOnly",
+    "PointerEvent",
+    "WheelEvent",
+    "Performance",
+    "RequestCache",
+]
