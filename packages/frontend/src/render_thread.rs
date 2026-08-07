@@ -383,6 +383,11 @@ impl ContactOverlay {
                     self.scratch[o + 4],
                     self.scratch[o + 5],
                 );
+                // NOTE: `self.scratch[o + 6]` carries this contact's normal
+                // force in newtons. Scaling the spike by it is the obvious next
+                // step and is NOT done here yet — see the plan's log. The force
+                // is on the wire and verified arriving; only the visual is
+                // outstanding.
                 // The spike mesh is built along +Y (meshgen's cylinder axis), so
                 // the contact normal only has to be rotated onto it. A
                 // degenerate normal would make `from_rotation_arc` produce NaN.

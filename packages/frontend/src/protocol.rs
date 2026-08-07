@@ -22,8 +22,9 @@
 //! i32[3]  ncon       LIVE contact count this frame, capped at MAX_CONTACTS
 //! f32[4 + g*7 + 0..3]  geom g world position  (MuJoCo frame, metres)
 //! f32[4 + g*7 + 3..7]  geom g world rotation  (quaternion, glam order x,y,z,w)
-//! f32[C + c*6 + 0..3]  contact c world position  (MuJoCo frame, metres)
-//! f32[C + c*6 + 3..6]  contact c world NORMAL    (unit, MuJoCo frame)
+//! f32[C + c*7 + 0..3]  contact c world position  (MuJoCo frame, metres)
+//! f32[C + c*7 + 3..6]  contact c world NORMAL    (unit, MuJoCo frame)
+//! f32[C + c*7 + 6]     contact c NORMAL FORCE    (newtons)
 //!     where C = 4 + ngeom*7
 //! ```
 //!
@@ -54,8 +55,9 @@ pub const POSE_STRIDE: usize = 7;
 /// i32/f32 header slots before the pose span.
 pub const POSE_HEADER: usize = 4;
 
-/// f32 slots per contact in the debug region: world position + unit normal.
-pub const CONTACT_STRIDE: usize = 6;
+/// f32 slots per contact in the debug region: world position, unit normal, and
+/// the normal force in newtons.
+pub const CONTACT_STRIDE: usize = 7;
 
 /// How many contacts the block reserves room for.
 ///

@@ -29,7 +29,19 @@ let steps_total = 0;
 // step while the block is fixed-size, so the region is preallocated and the
 // live count rides in the header.
 const MAX_CONTACTS = 256;
-const CONTACT_STRIDE = 6;
+const CONTACT_STRIDE = 7;
+
+// Scratch for mj_contactForce, which fills a 6-vector [force xyz, torque xyz]
+// in the CONTACT's frame — so element 0 is already the normal component and
+// needs no projection.
+//
+// It has to live in the MODULE's heap, not in a plain JS Float64Array: the
+// binding accepts either, but only a view over the module's own memory is
+// written THROUGH. A plain typed array is copied in and the result is
+// discarded, silently, which reads exactly like "every contact carries zero
+// force". Allocated once — a malloc per contact per step would be the only real
+// cost in this whole overlay.
+let forceBuf = null;
 
 const post = (obj) => self.postMessage(obj);
 const progress = (message) => post({ kind: "progress", message: `mujoco: ${message}` });
@@ -70,6 +82,9 @@ async function init({ mujoco_js, mujoco_wasm, model_xml }) {
 
     // Settle derived quantities (world poses at qpos0) so the first published
     // snapshot is the model's real initial pose, not zeros.
+    // 6 doubles for mj_contactForce's result (see `forceBuf`).
+    forceBuf = new mujoco.DoubleBuffer(6);
+
     mujoco.mj_forward(model, data);
 
     progress(`model ready — ${ngeom} geoms, dt ${(timestep * 1000).toFixed(1)} ms`);
@@ -160,11 +175,37 @@ function publishContacts() {
         contacts[o + 3] = frame[0];
         contacts[o + 4] = frame[1];
         contacts[o + 5] = frame[2];
+        contacts[o + 6] = normalForce(c);
         written++;
         if (typeof item.delete === "function") item.delete();
     }
     if (typeof contact.delete === "function") contact.delete();
     Atomics.store(header, 3, written);
+}
+
+// The normal force at contact `c`, newtons. mj_contactForce reports in the
+// contact's own frame, whose first axis IS the normal, so element 0 is the
+// answer with no projection.
+//
+// Probed once rather than assumed: the emscripten binding takes the output as a
+// `val`, and whether that means "fills the array you pass" or "returns a new
+// one" is not something the glue JS reveals.
+function normalForce(c) {
+    try {
+        mujoco.mj_contactForce(model, data, c, forceBuf);
+        // GetView() is the window onto the buffer's module-heap storage; the
+        // wrapper object itself is not indexable, and reading it as if it were
+        // yields a silent zero rather than an error.
+        const out = forceBuf.GetView();
+        const fn = Math.abs(out[0]);
+        return fn;
+    } catch (err) {
+        if (!normalForce._warned) {
+            normalForce._warned = true;
+            console.warn("[contactforce] unavailable:", err && err.message);
+        }
+        return 0;
+    }
 }
 
 function xposToPose(xpos, xmat, g, o) {
