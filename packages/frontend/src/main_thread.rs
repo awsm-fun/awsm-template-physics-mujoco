@@ -80,12 +80,17 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     set(&payload, "app_base", &JsValue::from_str(&app_base));
     // Debug overlays are opt-in via the page URL, and only the main thread can
     // read it — the render worker's own base is a `blob:`.
-    let contacts = window
-        .location()
-        .search()
-        .map(|s| s.contains("contacts"))
-        .unwrap_or(false);
-    set(&payload, "contacts", &JsValue::from_bool(contacts));
+    let search = window.location().search().unwrap_or_default();
+    set(
+        &payload,
+        "contacts",
+        &JsValue::from_bool(search.contains("contacts")),
+    );
+    set(
+        &payload,
+        "joints",
+        &JsValue::from_bool(search.contains("joints")),
+    );
     let transfer = js_sys::Array::new();
     transfer.push(&offscreen);
 
@@ -222,7 +227,11 @@ fn maybe_start(
         .ok()
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0) as usize;
-    let sab = js_sys::SharedArrayBuffer::new(pose_block_bytes(ngeom) as u32);
+    let njnt = js_sys::Reflect::get(&model, &JsValue::from_str("njnt"))
+        .ok()
+        .and_then(|v| v.as_f64())
+        .unwrap_or(0.0) as usize;
+    let sab = js_sys::SharedArrayBuffer::new(pose_block_bytes(ngeom, njnt) as u32);
 
     if let Some(mujoco) = mujoco_ref.borrow().as_ref() {
         let start = js_sys::Object::new();

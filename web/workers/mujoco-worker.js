@@ -18,11 +18,13 @@ let model = null;
 let data = null;
 let timestep = 0.005;
 let ngeom = 0;
+let njnt = 0;
 
 // Pose block views (set on "start").
 let header = null;   // Int32Array  [seq, steps, ngeom, ncon]
 let poses = null;    // Float32Array, 7 floats per geom after the header
-let contacts = null; // Float32Array, 6 floats per contact after the poses
+let contacts = null; // Float32Array, 7 floats per contact after the poses
+let joints = null;   // Float32Array, 6 floats per joint after the contacts
 let steps_total = 0;
 
 // Must match protocol.rs. Contacts are a DEBUG overlay: the count varies every
@@ -30,6 +32,7 @@ let steps_total = 0;
 // live count rides in the header.
 const MAX_CONTACTS = 256;
 const CONTACT_STRIDE = 7;
+const JOINT_STRIDE = 6;
 
 // Scratch for mj_contactForce, which fills a 6-vector [force xyz, torque xyz]
 // in the CONTACT's frame — so element 0 is already the normal component and
@@ -73,6 +76,7 @@ async function init({ mujoco_js, mujoco_wasm, model_xml }) {
     model = mujoco.MjModel.from_xml_string(xml);
     data = new mujoco.MjData(model);
     ngeom = model.ngeom;
+    njnt = model.njnt;
     // model.opt is an embind struct wrapper; read the timestep defensively so
     // an API change degrades to the humanoid's authored 5 ms, not a crash.
     try {
@@ -91,6 +95,7 @@ async function init({ mujoco_js, mujoco_wasm, model_xml }) {
     post({
         kind: "model",
         ngeom,
+        njnt,
         timestep,
         // .slice() detaches plain copies safe to structured-clone.
         geom_type: model.geom_type.slice(),
@@ -99,6 +104,10 @@ async function init({ mujoco_js, mujoco_wasm, model_xml }) {
         geom_size: model.geom_size.slice(),
         geom_rgba: model.geom_rgba.slice(),
         mat_rgba: model.mat_rgba.slice(),
+        // mjtJoint: 0 free, 1 ball, 2 slide, 3 hinge. Only slide and hinge have
+        // a single axis worth drawing.
+        jnt_type: model.jnt_type.slice(),
+        jnt_group: model.jnt_group.slice(),
     });
 }
 
@@ -106,6 +115,11 @@ function start(sab) {
     header = new Int32Array(sab);
     poses = new Float32Array(sab, 4 * 4, ngeom * 7); // skip the 4-slot i32 header
     contacts = new Float32Array(sab, (4 + ngeom * 7) * 4, MAX_CONTACTS * CONTACT_STRIDE);
+    joints = new Float32Array(
+        sab,
+        (4 + ngeom * 7 + MAX_CONTACTS * CONTACT_STRIDE) * 4,
+        njnt * JOINT_STRIDE,
+    );
     header[2] = ngeom;
     publish(); // the settled initial pose (mj_forward ran at init)
     progress("stepping");
@@ -139,6 +153,7 @@ function publish() {
         xposToPose(xpos, xmat, g, o);
     }
     publishContacts();
+    publishJoints();
     Atomics.store(header, 1, steps_total);
     Atomics.store(header, 0, header[0] + 1); // even — stable
 }
@@ -181,6 +196,22 @@ function publishContacts() {
     }
     if (typeof contact.delete === "function") contact.delete();
     Atomics.store(header, 3, written);
+}
+
+// Joint anchors and axes, world frame. Unlike contacts these are a FIXED-size
+// set — one entry per joint, every step — so there is no count to publish.
+function publishJoints() {
+    const xanchor = data.xanchor; // 3 per joint
+    const xaxis = data.xaxis;     // 3 per joint
+    for (let j = 0; j < njnt; j++) {
+        const o = j * JOINT_STRIDE;
+        joints[o] = xanchor[j * 3];
+        joints[o + 1] = xanchor[j * 3 + 1];
+        joints[o + 2] = xanchor[j * 3 + 2];
+        joints[o + 3] = xaxis[j * 3];
+        joints[o + 4] = xaxis[j * 3 + 1];
+        joints[o + 5] = xaxis[j * 3 + 2];
+    }
 }
 
 // The normal force at contact `c`, newtons. mj_contactForce reports in the

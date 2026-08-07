@@ -25,7 +25,9 @@
 //! f32[C + c*7 + 0..3]  contact c world position  (MuJoCo frame, metres)
 //! f32[C + c*7 + 3..6]  contact c world NORMAL    (unit, MuJoCo frame)
 //! f32[C + c*7 + 6]     contact c NORMAL FORCE    (newtons)
-//!     where C = 4 + ngeom*7
+//! f32[J + j*6 + 0..3]  joint j world ANCHOR      (MuJoCo frame, metres)
+//! f32[J + j*6 + 3..6]  joint j world AXIS        (unit, MuJoCo frame)
+//!     where C = 4 + ngeom*7 and J = C + MAX_CONTACTS*7
 //! ```
 //!
 //! ## The contact region is a DEBUG overlay
@@ -66,14 +68,26 @@ pub const CONTACT_STRIDE: usize = 7;
 /// sim, which does not know the overlay exists.
 pub const MAX_CONTACTS: usize = 256;
 
+/// f32 slots per joint in the debug region: world anchor + unit axis.
+pub const JOINT_STRIDE: usize = 6;
+
 /// f32 index where the contact region starts, for `ngeom` geoms.
 pub fn contact_offset(ngeom: usize) -> usize {
     POSE_HEADER + ngeom * POSE_STRIDE
 }
 
-/// Byte size of the pose block for `ngeom` geoms, including the contact region.
-pub fn pose_block_bytes(ngeom: usize) -> usize {
-    (contact_offset(ngeom) + MAX_CONTACTS * CONTACT_STRIDE) * 4
+/// f32 index where the joint region starts.
+///
+/// Unlike contacts, the joint count is FIXED by the model, so this region needs
+/// no live count and no pool slack — `njnt` entries, every one of them written
+/// every step.
+pub fn joint_offset(ngeom: usize) -> usize {
+    contact_offset(ngeom) + MAX_CONTACTS * CONTACT_STRIDE
+}
+
+/// Byte size of the pose block, including both debug regions.
+pub fn pose_block_bytes(ngeom: usize, njnt: usize) -> usize {
+    (joint_offset(ngeom) + njnt * JOINT_STRIDE) * 4
 }
 
 /// Render-worker → main messages (loading progress + lifecycle).

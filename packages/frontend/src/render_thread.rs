@@ -32,8 +32,8 @@ use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 
 use crate::protocol::{
-    contact_offset, CameraMsg, RenderMsg, ResizeMsg, CONTACT_STRIDE, MAX_CONTACTS, POSE_HEADER,
-    POSE_STRIDE,
+    contact_offset, joint_offset, CameraMsg, RenderMsg, ResizeMsg, CONTACT_STRIDE, JOINT_STRIDE,
+    MAX_CONTACTS, POSE_HEADER, POSE_STRIDE,
 };
 
 /// The boxed RAF callback, self-referenced so the render loop can reschedule
@@ -97,6 +97,21 @@ struct SimLink {
     last_seq: i32,
     /// The contact-point debug overlay, when it was built.
     contacts: Option<ContactOverlay>,
+    /// The joint-axis debug overlay, when it was built.
+    joints: Option<JointOverlay>,
+}
+
+/// The joint-axis overlay: one bar through each hinge or slide joint's world
+/// anchor, along its world axis.
+///
+/// Simpler than the contacts: a model's joint count is fixed, so there is no
+/// pool, no live count and no visibility toggling — every bar that exists is
+/// always drawn. Ball and free joints have no single axis and get no bar at all.
+struct JointOverlay {
+    region: js_sys::Float32Array,
+    scratch: Vec<f32>,
+    /// `joint_id → ` its bar, or `None` for a joint with no meaningful axis.
+    bars: Vec<Option<awsm_renderer::transforms::TransformKey>>,
 }
 
 /// The contact-point overlay: a preallocated pool of spikes, one per possible
@@ -157,6 +172,10 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
         .ok()
         .and_then(|v| v.as_bool())
         .unwrap_or(false);
+    let show_joints = js_sys::Reflect::get(&payload, &JsValue::from_str("joints"))
+        .ok()
+        .and_then(|v| v.as_bool())
+        .unwrap_or(false);
     let canvas_handle = canvas.clone();
     post_progress("render worker: requesting WebGPU device…");
     let gpu =
@@ -165,7 +184,15 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
         .with_device_request_limits(DeviceRequestLimits::max_all());
 
     wasm_bindgen_futures::spawn_local(async move {
-        if let Err(err) = run(gpu_builder, canvas_handle, origin, show_contacts).await {
+        if let Err(err) = run(
+            gpu_builder,
+            canvas_handle,
+            origin,
+            show_contacts,
+            show_joints,
+        )
+        .await
+        {
             tracing::error!("render thread: {err:?}");
             post_to_main(&RenderMsg::Error {
                 message: format!("{err:?}"),
@@ -180,6 +207,7 @@ async fn run(
     canvas: web_sys::OffscreenCanvas,
     origin: String,
     show_contacts: bool,
+    show_joints: bool,
 ) -> Result<(), JsValue> {
     use awsm_renderer::camera::CameraParams;
     use awsm_renderer::AwsmRendererBuilder;
@@ -285,6 +313,7 @@ async fn run(
         camera.clone(),
         canvas.clone(),
         show_contacts,
+        show_joints,
     )?;
     // Only now is the worker listening — main holds the model message until
     // this arrives.
@@ -355,6 +384,9 @@ fn apply_poses(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
     if let Some(overlay) = &mut m.contacts {
         overlay.region.copy_to(&mut overlay.scratch[..]);
     }
+    if let Some(overlay) = &mut m.joints {
+        overlay.region.copy_to(&mut overlay.scratch[..]);
+    }
     let seq1 = js_sys::Atomics::load(&m.header, 0).unwrap_or(-1);
     if seq0 != seq1 {
         return; // torn — writer was mid-publish
@@ -367,6 +399,39 @@ fn apply_poses(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
     }
     if let Some(overlay) = &mut m.contacts {
         overlay.apply(r, ncon);
+    }
+    if let Some(overlay) = &mut m.joints {
+        overlay.apply(r);
+    }
+}
+
+impl JointOverlay {
+    fn apply(&mut self, r: &mut awsm_renderer::AwsmRenderer) {
+        for (j, bar) in self.bars.iter().enumerate() {
+            let Some(tk) = bar else { continue };
+            let o = j * JOINT_STRIDE;
+            let anchor = Vec3::new(self.scratch[o], self.scratch[o + 1], self.scratch[o + 2]);
+            let axis = Vec3::new(
+                self.scratch[o + 3],
+                self.scratch[o + 4],
+                self.scratch[o + 5],
+            );
+            let rotation = if axis.length_squared() > 1e-9 {
+                Quat::from_rotation_arc(Vec3::Y, axis.normalize())
+            } else {
+                Quat::IDENTITY
+            };
+            let _ = r.transforms.set_local(
+                *tk,
+                awsm_renderer::transforms::Transform {
+                    // Centred on the anchor, unlike a contact spike: a joint
+                    // axis runs BOTH ways through its pivot.
+                    translation: anchor,
+                    rotation,
+                    scale: Vec3::ONE,
+                },
+            );
+        }
     }
 }
 
@@ -454,6 +519,7 @@ fn install_onmessage(
     camera: Rc<RefCell<OrbitCamera>>,
     canvas: web_sys::OffscreenCanvas,
     show_contacts: bool,
+    show_joints: bool,
 ) -> Result<(), JsValue> {
     let scope = js_sys::global().unchecked_into::<web_sys::DedicatedWorkerGlobalScope>();
     let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
@@ -480,7 +546,7 @@ fn install_onmessage(
                 .clone()
                 .unwrap_or_else(|| instance.source.filename.clone());
             let mut r = cell.borrow_mut();
-            match link_sim(&mut r, instance, &data, show_contacts) {
+            match link_sim(&mut r, instance, &data, show_contacts, show_joints) {
                 Ok(m) => {
                     tracing::info!("render thread: driving {label} — {bound}/{total} geoms bound");
                     post_progress(&format!("sim linked ({bound}/{total} geoms) — running"));
@@ -528,6 +594,7 @@ fn link_sim(
     instance: awsm_renderer_scene_loader::mujoco::MujocoInstance,
     data: &JsValue,
     show_contacts: bool,
+    show_joints: bool,
 ) -> Result<SimLink, JsValue> {
     let get = |key: &str| js_sys::Reflect::get(data, &JsValue::from_str(key));
     let ngeom = get("ngeom")?.as_f64().unwrap_or(0.0) as usize;
@@ -567,6 +634,20 @@ fn link_sim(
         }
         (false, _) => None,
     };
+    let joints = match show_joints {
+        true => match instance
+            .root_transform
+            .ok_or_else(|| JsValue::from_str("the sim instance has no resolved root transform"))
+            .and_then(|root| build_joint_overlay(r, data, &sab, ngeom, root))
+        {
+            Ok(o) => Some(o),
+            Err(err) => {
+                tracing::warn!("joint overlay: {err:?} — continuing without it");
+                None
+            }
+        },
+        false => None,
+    };
     Ok(SimLink {
         instance,
         header,
@@ -574,8 +655,74 @@ fn link_sim(
         scratch: vec![0.0; ngeom * POSE_STRIDE],
         last_seq: 0,
         contacts,
+        joints,
     })
 }
+
+/// Mint one bar per hinge/slide joint, under the sim instance's root.
+fn build_joint_overlay(
+    r: &mut awsm_renderer::AwsmRenderer,
+    data: &JsValue,
+    sab: &JsValue,
+    ngeom: usize,
+    root: awsm_renderer::transforms::TransformKey,
+) -> Result<JointOverlay, JsValue> {
+    let get = |key: &str| js_sys::Reflect::get(data, &JsValue::from_str(key));
+    let njnt = get("njnt")?.as_f64().unwrap_or(0.0) as usize;
+    let jnt_type: Vec<i32> = get("jnt_type")
+        .ok()
+        .map(|v| v.unchecked_into::<js_sys::Int32Array>().to_vec())
+        .unwrap_or_default();
+
+    let mut pbr = awsm_renderer::materials::pbr::PbrMaterial::new(
+        awsm_renderer::materials::MaterialAlphaMode::Opaque,
+        false,
+    );
+    // Blue, to read as a different KIND of annotation from the red contacts.
+    pbr.base_color_factor = [0.15, 0.35, 1.0, 1.0];
+    pbr.emissive_factor = [0.05, 0.15, 0.6];
+    pbr.metallic_factor = 0.0;
+    pbr.roughness_factor = 1.0;
+    let material = r.materials.insert(
+        awsm_renderer::materials::Material::Pbr(Box::new(pbr)),
+        &r.textures,
+        &r.dynamic_materials,
+        &r.extras_pool,
+    );
+
+    let mut bars = Vec::with_capacity(njnt);
+    for j in 0..njnt {
+        // mjtJoint 2 = slide, 3 = hinge. A free joint has six degrees of
+        // freedom and a ball joint three; neither has one axis to draw.
+        let drawable = matches!(jnt_type.get(j).copied(), Some(2) | Some(3));
+        if !drawable {
+            bars.push(None);
+            continue;
+        }
+        let tk = r
+            .transforms
+            .insert(awsm_renderer::transforms::Transform::default(), Some(root));
+        let mesh = awsm_renderer_scene_loader::mesh_data_to_raw(
+            awsm_renderer_meshgen::cylinder_mesh(0.008, JOINT_AXIS_LEN, 8),
+        );
+        r.add_raw_mesh(mesh, tk, material)
+            .map_err(|e| JsValue::from_str(&format!("joint bar {j}: {e}")))?;
+        bars.push(Some(tk));
+    }
+
+    let start = joint_offset(ngeom);
+    let region =
+        js_sys::Float32Array::new(sab).subarray(start as u32, (start + njnt * JOINT_STRIDE) as u32);
+    Ok(JointOverlay {
+        region,
+        scratch: vec![0.0; njnt * JOINT_STRIDE],
+        bars,
+    })
+}
+
+/// Length of a joint-axis bar, metres. Deliberately short: at humanoid scale a
+/// long bar through every hinge hides the robot it is annotating.
+const JOINT_AXIS_LEN: f32 = 0.16;
 
 /// Mint the contact-spike pool, parented under the sim instance's root so
 /// contact positions can be written as raw MuJoCo world coordinates.
