@@ -27,6 +27,7 @@ let poses = null;    // Float32Array, 7 floats per geom after the header
 let contacts = null; // Float32Array, 7 floats per contact after the poses
 let joints = null;   // Float32Array, 6 floats per joint after the contacts
 let inertia = null;  // Float32Array, 7 floats per body after the joints
+let bodies = null;   // Float32Array, 7 floats per body after the inertia frames
 let steps_total = 0;
 
 // Must match protocol.rs. Contacts are a DEBUG overlay: the count varies every
@@ -134,6 +135,11 @@ function start(sab) {
         (4 + ngeom * 7 + MAX_CONTACTS * CONTACT_STRIDE + njnt * JOINT_STRIDE) * 4,
         nbody * 7,
     );
+    bodies = new Float32Array(
+        sab,
+        (4 + ngeom * 7 + MAX_CONTACTS * CONTACT_STRIDE + njnt * JOINT_STRIDE + nbody * 7) * 4,
+        nbody * 7,
+    );
     header[2] = ngeom;
     publish(); // the settled initial pose (mj_forward ran at init)
     progress("stepping");
@@ -169,6 +175,7 @@ function publish() {
     publishContacts();
     publishJoints();
     publishInertia();
+    publishBodies();
     Atomics.store(header, 1, steps_total);
     Atomics.store(header, 0, header[0] + 1); // even — stable
 }
@@ -226,6 +233,31 @@ function publishJoints() {
         joints[o + 3] = xaxis[j * 3];
         joints[o + 4] = xaxis[j * 3 + 1];
         joints[o + 5] = xaxis[j * 3 + 2];
+    }
+}
+
+// Body WORLD frames — the channel that deforms flexes.
+//
+// A deformable imports as an ordinary skinned mesh whose joints ARE the bodies
+// its cage rides, so this is all the sim has to publish to drive one: nbody
+// frames, no vertices. Note this is the body frame, NOT the inertial frame
+// published just above.
+//
+// `xquat` is already a quaternion in MuJoCo's [w,x,y,z] order — the very layout
+// the pose block wants — so unlike the geom and inertia frames there is no
+// matrix to convert.
+function publishBodies() {
+    const xpos = data.xpos;   // 3 per body
+    const xquat = data.xquat; // 4 per body, [w,x,y,z]
+    for (let b = 0; b < nbody; b++) {
+        const o = b * 7;
+        bodies[o] = xpos[b * 3];
+        bodies[o + 1] = xpos[b * 3 + 1];
+        bodies[o + 2] = xpos[b * 3 + 2];
+        bodies[o + 3] = xquat[b * 4];
+        bodies[o + 4] = xquat[b * 4 + 1];
+        bodies[o + 5] = xquat[b * 4 + 2];
+        bodies[o + 6] = xquat[b * 4 + 3];
     }
 }
 

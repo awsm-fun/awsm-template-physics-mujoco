@@ -44,6 +44,34 @@ sources: Apple's clang has no wasm backend, so on macOS `brew install llvm`
 Open it in a browser with **WebGPU** + **`SharedArrayBuffer`** (recent
 Chrome/Edge).
 
+### Scenes
+
+Two, chosen by query string. A scene is a MuJoCo model **and** the player bundle
+exported from that same model — mixing them gives an instance whose geom count
+disagrees with the sim, so one name picks both (`Scene` in `protocol.rs`).
+
+| URL | Model | What it shows |
+|---|---|---|
+| `/` | `media/mujoco/humanoid.xml` | The DeepMind humanoid ragdoll — rigid bodies, and the subject of every debug overlay below. |
+| `/?scene=flag` | `media/mujoco/flag.xml` | A **deformable**: MuJoCo cloth (a *flex*) imported as an ordinary skinned mesh and deformed by the body pose channel. |
+
+The flag is the one that proves the deformable path end to end. A flex's 171
+cloth vertices each ride their own body, and the sim publishes those body frames
+into the same seqlock as the geom poses; the renderer skins to them. **No vertex
+data crosses the wire** — 171 frames per step is the entire cost of a waving
+cloth.
+
+Debug overlays are opt-in and stack, e.g. `/?contacts&joints`:
+
+| Param | Overlay |
+|---|---|
+| `?contacts` | Active contact points, spikes scaled by normal force |
+| `?joints` | Hinge/slide joint anchors + axes |
+| `?inertia` | Per-body equivalent inertia boxes (what the solver actually sees) |
+
+They live only in this template — the renderer, the editor and the bundle format
+never learn what a contact is.
+
 **Controls:**
 
 | Input | Action |

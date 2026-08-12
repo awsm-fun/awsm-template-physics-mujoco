@@ -1,0 +1,6233 @@
+name = "untitled.awsm"
+custom_materials = []
+animations = []
+
+[environment]
+skybox = "built_in_default"
+specular = "built_in_default"
+irradiance = "built_in_default"
+
+[environment.probe]
+enabled = false
+center = [
+    0.0,
+    0.0,
+    0.0,
+]
+half_extents = [
+    10.0,
+    10.0,
+    10.0,
+]
+
+[environment.rotation]
+skybox = [
+    0.0,
+    0.0,
+    0.0,
+]
+specular = [
+    0.0,
+    0.0,
+    0.0,
+]
+irradiance = [
+    0.0,
+    0.0,
+    0.0,
+]
+
+[shadows]
+sscs_enabled = false
+sscs_step_count = 16
+sscs_step_world = 0.03999999910593033
+sscs_thickness = 0.05000000074505806
+sscs_directional_darkening = 0.3499999940395355
+sscs_punctual_darkening = 0.8999999761581421
+atlas_size = 4096
+evsm_atlas_size = 2048
+evsm_exponent = 10.0
+evsm_blur_radius = 6
+max_point_shadows = 8
+point_shadow_resolution = 1024
+debug_cascade_colors = false
+
+[post_process]
+tonemapping = "khronos_neutral_pbr"
+bloom = false
+dof = false
+exposure = 0.0
+bloom_threshold = 1.0
+bloom_knee = 0.5
+bloom_intensity = 1.0
+bloom_scatter = 1.0
+
+[post_process.ssr]
+enabled = false
+intensity = 1.0
+max_distance = 100.0
+thickness = 1.0
+max_steps = 96
+spread_cutoff = 0.6000000238418579
+edge_fade = 0.03999999910593033
+resolution_scale = 0.5
+temporal = false
+temporal_weight = 0.8999999761581421
+bvh_reflections = false
+
+[post_process.atmosphere]
+mode = "off"
+color = [
+    0.5,
+    0.6000000238418579,
+    0.699999988079071,
+]
+density = 0.019999999552965164
+base_height = 0.0
+height_falloff = 0.0
+scattering_anisotropy = 0.30000001192092896
+volumetric_distance = 80.0
+volumetric_temporal = false
+
+[assets.e71eaf3b-479d-4af7-81b3-fc398f857a6f]
+gltf_material_asset_ids = []
+gltf_image_asset_ids = []
+content_hash = ""
+lod = "none"
+
+[assets.e71eaf3b-479d-4af7-81b3-fc398f857a6f.source]
+filename = "e71eaf3b-479d-4af7-81b3-fc398f857a6f.glb"
+
+[assets.5abe5f58-73f9-42b9-bd1f-c0fc3be7d222]
+gltf_material_asset_ids = []
+gltf_image_asset_ids = []
+content_hash = ""
+lod = "none"
+
+[assets.5abe5f58-73f9-42b9-bd1f-c0fc3be7d222.source]
+mesh = "glb"
+
+[assets.4f4abc6a-9685-4726-884b-b302be23d19c]
+gltf_material_asset_ids = []
+gltf_image_asset_ids = []
+content_hash = ""
+lod = "none"
+
+[assets.4f4abc6a-9685-4726-884b-b302be23d19c.source]
+mesh = "glb"
+
+[mixer]
+layers = []
+
+[[nodes]]
+id = "c6345059-2b5c-491d-8290-daa6f89efda2"
+name = "Directional Light"
+locked = false
+visible = true
+prefab = false
+children = []
+
+[nodes.transform]
+translation = [
+    0.0,
+    0.0,
+    0.0,
+]
+rotation = [
+    -0.4226182699203491,
+    0.0,
+    0.0,
+    0.9063077569007874,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.kind.light.directional]
+color = [
+    1.0,
+    1.0,
+    1.0,
+]
+intensity = 4.0
+volumetric_intensity = 1.0
+
+[nodes.kind.light.directional.shadow]
+cast = true
+depth_bias = 0.0010000000474974513
+normal_bias = 0.0
+resolution = 2048
+hardness = "soft"
+pcss_penumbra_scale = 1.0
+kernel_slack = 0.0
+shadow_samples = 16
+max_distance = 0.0
+cascade_count = 4
+cascade_split_lambda = 0.5
+evsm_cutoff = "last_cascade"
+far_cascade_update_rate = "every4_frames"
+cube_face_update_rate = "every_frame"
+
+[[nodes]]
+id = "2dd91f69-6f9b-4699-897e-d8f39e43dcae"
+name = "Flag"
+kind = "group"
+locked = false
+visible = true
+prefab = false
+
+[nodes.transform]
+translation = [
+    0.0,
+    0.0,
+    0.0,
+]
+rotation = [
+    -0.7071067690849304,
+    0.0,
+    0.0,
+    0.7071067690849304,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.mujoco.instance]
+model_name = "Flag"
+geom_count = 1
+site_count = 0
+tendon_capacity = []
+flex_vertex_counts = [171]
+body_count = 173
+visible_groups = [
+    0,
+    1,
+    2,
+]
+
+[nodes.mujoco.instance.source]
+filename = "flag.xml"
+sha256 = "a0b61e7a2c2b3ca377e023363e1cc607d81fe11916037c2ec5570ecaf3b6286a"
+mujoco_version = "3.11.0"
+
+[[nodes.children]]
+id = "b4a59c77-bd8b-4f90-a79d-7fa7bcc641dc"
+name = "floor"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.0,
+    0.0,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.mesh]
+mesh = "4f4abc6a-9685-4726-884b-b302be23d19c"
+selected_variant = "dece3fb3-e601-4b2b-939e-57586d938d4c"
+
+[[nodes.children.kind.mesh.material_variants]]
+id = "dece3fb3-e601-4b2b-939e-57586d938d4c"
+name = "rgba 0.50 0.50 0.50"
+
+[nodes.children.kind.mesh.material_variants.instance]
+asset = "4cb358bc-c6ae-493c-a03e-0b8a618de9af"
+
+[nodes.children.kind.mesh.material_variants.instance.inline]
+label = "rgba 0.50 0.50 0.50"
+base_color = [
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.699999988079071
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.geom]
+geom_id = 0
+group = 0
+kind = "plane"
+body = 0
+
+[[nodes.children]]
+id = "470ca336-b3ef-4ac8-8e67-aa81c7ff5c10"
+name = "flag joint 0"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    -0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 2
+
+[[nodes.children]]
+id = "4b77f351-be9e-4737-a85c-ceffabd48480"
+name = "flag joint 1"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    -0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 3
+
+[[nodes.children]]
+id = "21dfef51-728f-4236-abb5-08e2199f0d50"
+name = "flag joint 2"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    -0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 4
+
+[[nodes.children]]
+id = "0d7ca2ec-a59d-4bca-8243-a4e0bdfcf586"
+name = "flag joint 3"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    -0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 5
+
+[[nodes.children]]
+id = "10713474-b4b4-43d8-bf4d-75c280487291"
+name = "flag joint 4"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    -0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 6
+
+[[nodes.children]]
+id = "030bc2ae-847e-4501-a4c9-b50ec1fd66a2"
+name = "flag joint 5"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    -0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 7
+
+[[nodes.children]]
+id = "ec43ebad-da94-45ae-8e36-4dd0e3489705"
+name = "flag joint 6"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    -0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 8
+
+[[nodes.children]]
+id = "4c9453f9-8f59-4f24-8962-c8219127b0d7"
+name = "flag joint 7"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    -0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 9
+
+[[nodes.children]]
+id = "c713f41f-8a84-4ef8-bbd4-9880db74367f"
+name = "flag joint 8"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    -0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 10
+
+[[nodes.children]]
+id = "4b0c017f-7c2c-4a39-9b90-1ffc8a0a6752"
+name = "flag joint 9"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.0,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 11
+
+[[nodes.children]]
+id = "76f7a52a-67a1-4403-942f-544e9cbc1b23"
+name = "flag joint 10"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 12
+
+[[nodes.children]]
+id = "951846e8-9efa-41ae-b38f-d3d7d2e70c1d"
+name = "flag joint 11"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 13
+
+[[nodes.children]]
+id = "2623317b-79c3-46d8-a9f4-68c4112163c2"
+name = "flag joint 12"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 14
+
+[[nodes.children]]
+id = "f8b09ebc-eb36-4a1e-92ac-1bfc89bf58a9"
+name = "flag joint 13"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 15
+
+[[nodes.children]]
+id = "3c052a77-e202-41b2-a114-62b2b003ba45"
+name = "flag joint 14"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 16
+
+[[nodes.children]]
+id = "5eebd4d4-f0b0-481b-950f-b162e605ec7c"
+name = "flag joint 15"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 17
+
+[[nodes.children]]
+id = "98a5b221-2211-47e2-a792-32a27ee9e15d"
+name = "flag joint 16"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 18
+
+[[nodes.children]]
+id = "d727d4a3-7038-4450-8c17-f5d3a9372d8e"
+name = "flag joint 17"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 19
+
+[[nodes.children]]
+id = "8179c972-671c-4d89-ac31-b3f2f13aab81"
+name = "flag joint 18"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.20000000298023224,
+    0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 20
+
+[[nodes.children]]
+id = "a26d503c-902f-44c2-a974-df0ad5d608a1"
+name = "flag joint 19"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    -0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 21
+
+[[nodes.children]]
+id = "cbcca32f-7020-49aa-be0d-0643bb172467"
+name = "flag joint 20"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    -0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 22
+
+[[nodes.children]]
+id = "a6149a9c-2665-46aa-9cce-e43599a15219"
+name = "flag joint 21"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    -0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 23
+
+[[nodes.children]]
+id = "823a394a-f6f3-4bc8-b835-720c49fc59bf"
+name = "flag joint 22"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    -0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 24
+
+[[nodes.children]]
+id = "139aee8a-6934-4076-a230-72bf9291b4fe"
+name = "flag joint 23"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    -0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 25
+
+[[nodes.children]]
+id = "94443526-6524-422b-9b2b-81553dc4a6ce"
+name = "flag joint 24"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    -0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 26
+
+[[nodes.children]]
+id = "74868f66-f7bd-4199-9d93-9ab5cdf9eed2"
+name = "flag joint 25"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    -0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 27
+
+[[nodes.children]]
+id = "37c6429a-a116-45f3-9bbc-0a9a5a3d3962"
+name = "flag joint 26"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    -0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 28
+
+[[nodes.children]]
+id = "5b650e11-0099-47e6-87c3-710be9b4e7f8"
+name = "flag joint 27"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    -0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 29
+
+[[nodes.children]]
+id = "e091be29-dab8-46df-a0be-08b56452b512"
+name = "flag joint 28"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.0,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 30
+
+[[nodes.children]]
+id = "a219a5eb-eb90-4903-973c-eadbfd1fc4d7"
+name = "flag joint 29"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 31
+
+[[nodes.children]]
+id = "baa56d39-d6e6-40d5-a14b-b36d344f1326"
+name = "flag joint 30"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 32
+
+[[nodes.children]]
+id = "405455a6-72ae-4c7d-97bb-ea0a8298106a"
+name = "flag joint 31"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 33
+
+[[nodes.children]]
+id = "61342012-cf5c-4935-8efd-7837664b7818"
+name = "flag joint 32"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 34
+
+[[nodes.children]]
+id = "2e72629a-26da-477d-923c-4c864f3c9df2"
+name = "flag joint 33"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 35
+
+[[nodes.children]]
+id = "3d9a0650-51da-4c43-bfab-b66368b96e1a"
+name = "flag joint 34"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 36
+
+[[nodes.children]]
+id = "70dd3410-be96-47d9-8882-dbcdffcb423b"
+name = "flag joint 35"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 37
+
+[[nodes.children]]
+id = "45ba3f7d-9296-4cc1-b116-b94729f06e6d"
+name = "flag joint 36"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 38
+
+[[nodes.children]]
+id = "c3cff673-8388-49df-bd53-400393060483"
+name = "flag joint 37"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.15000000596046448,
+    0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 39
+
+[[nodes.children]]
+id = "82997f78-2100-4b65-afaf-390a388e9ad5"
+name = "flag joint 38"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    -0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 40
+
+[[nodes.children]]
+id = "de71109d-d7b5-415e-b709-586c33dcc933"
+name = "flag joint 39"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    -0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 41
+
+[[nodes.children]]
+id = "dbf652de-2936-4be9-baed-93e71003e532"
+name = "flag joint 40"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    -0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 42
+
+[[nodes.children]]
+id = "67cc8b54-78fd-4467-824d-0882112b91a4"
+name = "flag joint 41"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    -0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 43
+
+[[nodes.children]]
+id = "6c570c35-be7d-4342-b353-d3095ff706e5"
+name = "flag joint 42"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    -0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 44
+
+[[nodes.children]]
+id = "dcb6448e-c300-48db-bfbb-58e0259aa887"
+name = "flag joint 43"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    -0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 45
+
+[[nodes.children]]
+id = "d819bfb9-f23a-4b2f-99f4-9ece962f30b2"
+name = "flag joint 44"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    -0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 46
+
+[[nodes.children]]
+id = "978a6f72-a12a-4363-b219-83191cda37d5"
+name = "flag joint 45"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    -0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 47
+
+[[nodes.children]]
+id = "a4770233-e892-4644-a1f1-67fe03d6b682"
+name = "flag joint 46"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    -0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 48
+
+[[nodes.children]]
+id = "fcb31e5b-9050-470e-ab22-3aa18cde24d4"
+name = "flag joint 47"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.0,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 49
+
+[[nodes.children]]
+id = "5fda4b95-7116-4029-b24d-dbe79ff2bdce"
+name = "flag joint 48"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 50
+
+[[nodes.children]]
+id = "9f5f9049-538f-492b-a9e6-aa7be42826af"
+name = "flag joint 49"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 51
+
+[[nodes.children]]
+id = "bd1a9d3b-ec5f-4fa2-afba-2d090b198a75"
+name = "flag joint 50"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 52
+
+[[nodes.children]]
+id = "f442c1c0-65b1-40f4-8f70-56f6153e01c7"
+name = "flag joint 51"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 53
+
+[[nodes.children]]
+id = "ac6ec7b9-ed03-4bb0-8f81-497047165a52"
+name = "flag joint 52"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 54
+
+[[nodes.children]]
+id = "c4ba0a84-fcb6-41d7-8bbe-fa58ad9dd3fe"
+name = "flag joint 53"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 55
+
+[[nodes.children]]
+id = "175f08eb-4b01-424b-9dbb-e223e784b293"
+name = "flag joint 54"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 56
+
+[[nodes.children]]
+id = "a9dd9bc5-8f11-4b50-a0bf-b816cb027d72"
+name = "flag joint 55"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 57
+
+[[nodes.children]]
+id = "ea5551cc-2079-460d-8ece-bff73d58b3bb"
+name = "flag joint 56"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.10000000149011612,
+    0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 58
+
+[[nodes.children]]
+id = "2b978c96-577a-452e-a9fc-7c8ec3b365b7"
+name = "flag joint 57"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    -0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 59
+
+[[nodes.children]]
+id = "53a0987e-574b-42a8-87b8-da88fe2069d9"
+name = "flag joint 58"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    -0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 60
+
+[[nodes.children]]
+id = "b0968647-f404-4b39-953e-50b37862c1ce"
+name = "flag joint 59"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    -0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 61
+
+[[nodes.children]]
+id = "839d7d4a-20a3-411e-8a0a-a53868fc627f"
+name = "flag joint 60"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    -0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 62
+
+[[nodes.children]]
+id = "0927e0e8-bad4-4bf3-9ab1-54fbc02e351e"
+name = "flag joint 61"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    -0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 63
+
+[[nodes.children]]
+id = "7ff787ed-fa1f-490e-89d2-d9fe277c3616"
+name = "flag joint 62"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    -0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 64
+
+[[nodes.children]]
+id = "bdb1bb2a-100d-4449-a694-4484c6ec4050"
+name = "flag joint 63"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    -0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 65
+
+[[nodes.children]]
+id = "e6fa6b54-ad4f-474a-99fc-1123f4e34e34"
+name = "flag joint 64"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    -0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 66
+
+[[nodes.children]]
+id = "1b232f98-9357-458d-8046-20104b0e6731"
+name = "flag joint 65"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    -0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 67
+
+[[nodes.children]]
+id = "b0d21487-e7d7-42d0-a7d7-b64c9edc9916"
+name = "flag joint 66"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.0,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 68
+
+[[nodes.children]]
+id = "17d56849-4db2-4747-a0cf-47e5fa1b6c66"
+name = "flag joint 67"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 69
+
+[[nodes.children]]
+id = "d8d15f51-0a47-4537-8085-619825db341f"
+name = "flag joint 68"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 70
+
+[[nodes.children]]
+id = "891c673f-2083-4380-b7b8-d2e34367cbe7"
+name = "flag joint 69"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 71
+
+[[nodes.children]]
+id = "8111da27-f46e-470d-babd-ef01ba0a1c2e"
+name = "flag joint 70"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 72
+
+[[nodes.children]]
+id = "7441eb00-2b23-4c63-9374-7d16d083ae46"
+name = "flag joint 71"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 73
+
+[[nodes.children]]
+id = "67c96d31-8f54-4711-8961-000ba938f1e1"
+name = "flag joint 72"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 74
+
+[[nodes.children]]
+id = "5ee6a1e1-ff4a-4b72-b878-b00bcf863f8f"
+name = "flag joint 73"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 75
+
+[[nodes.children]]
+id = "8aad24e1-709c-47fe-94df-daa0879008ac"
+name = "flag joint 74"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 76
+
+[[nodes.children]]
+id = "fda1758e-80d2-46ef-baa4-88745261cfef"
+name = "flag joint 75"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    -0.05000000074505806,
+    0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 77
+
+[[nodes.children]]
+id = "318e0df8-24c2-4346-98c0-cc5780ab7627"
+name = "flag joint 76"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    -0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 78
+
+[[nodes.children]]
+id = "a4d4f78b-0763-457d-8419-4e3a9eff659a"
+name = "flag joint 77"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    -0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 79
+
+[[nodes.children]]
+id = "3812a08f-d610-4e48-b8fd-b39f19cfb2de"
+name = "flag joint 78"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    -0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 80
+
+[[nodes.children]]
+id = "2b298222-ff23-45cb-9b85-b8ecd61c7cbd"
+name = "flag joint 79"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    -0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 81
+
+[[nodes.children]]
+id = "789a6574-ea16-43f2-b163-a933c0731764"
+name = "flag joint 80"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    -0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 82
+
+[[nodes.children]]
+id = "d05a4bdc-4247-4c4f-a2f7-7e7d31cd8a7c"
+name = "flag joint 81"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    -0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 83
+
+[[nodes.children]]
+id = "5769fefd-ca08-44d9-8149-b30b6b79bae1"
+name = "flag joint 82"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    -0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 84
+
+[[nodes.children]]
+id = "c96c11cb-75fc-4f58-aae9-d83d3589e4a4"
+name = "flag joint 83"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    -0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 85
+
+[[nodes.children]]
+id = "58e0ea5b-f0af-4ec5-8315-c81bb1c5df93"
+name = "flag joint 84"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    -0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 86
+
+[[nodes.children]]
+id = "456de193-6973-47bf-80af-e1eaf359fe4f"
+name = "flag joint 85"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.0,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 87
+
+[[nodes.children]]
+id = "56f41a7b-a882-4eed-8104-a24a54291e33"
+name = "flag joint 86"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 88
+
+[[nodes.children]]
+id = "9996aee6-c620-42e7-883f-da444d5201ba"
+name = "flag joint 87"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 89
+
+[[nodes.children]]
+id = "4d1ca542-8949-4668-916a-d52229cf49bf"
+name = "flag joint 88"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 90
+
+[[nodes.children]]
+id = "d997f56f-4728-4878-b168-916d1ac49345"
+name = "flag joint 89"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 91
+
+[[nodes.children]]
+id = "2863ce9f-bb0e-45f0-86e2-79e2fd450eab"
+name = "flag joint 90"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 92
+
+[[nodes.children]]
+id = "774e7a86-842d-4ea8-acd1-bb059da5883e"
+name = "flag joint 91"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 93
+
+[[nodes.children]]
+id = "aee94bc7-b8d6-4221-a35c-b7d7f2ee2bc5"
+name = "flag joint 92"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 94
+
+[[nodes.children]]
+id = "ff411a1a-45bc-4ad1-8387-65debe83c582"
+name = "flag joint 93"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 95
+
+[[nodes.children]]
+id = "062b337a-c72e-4576-a4ce-4d90c7e9120c"
+name = "flag joint 94"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 96
+
+[[nodes.children]]
+id = "2c565204-c11c-429b-88f5-5ac2aff9bb69"
+name = "flag joint 95"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    -0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 97
+
+[[nodes.children]]
+id = "878f3334-46a7-48d6-ada1-bfb8613a55d9"
+name = "flag joint 96"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    -0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 98
+
+[[nodes.children]]
+id = "b556197b-a908-4b9e-a185-c1c7004c8462"
+name = "flag joint 97"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    -0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 99
+
+[[nodes.children]]
+id = "ce2fcaf5-e0c3-48ea-987d-5ece96d158e1"
+name = "flag joint 98"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    -0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 100
+
+[[nodes.children]]
+id = "9e7bdfed-c1c7-40fb-a38b-14cab37b7083"
+name = "flag joint 99"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    -0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 101
+
+[[nodes.children]]
+id = "a3560699-9c76-47b4-8897-d57e2b824e6e"
+name = "flag joint 100"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    -0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 102
+
+[[nodes.children]]
+id = "d42b2aad-754e-43cc-86e5-338498f7c9f2"
+name = "flag joint 101"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    -0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 103
+
+[[nodes.children]]
+id = "5e907644-5a9e-4a77-b723-4fb9815d40ca"
+name = "flag joint 102"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    -0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 104
+
+[[nodes.children]]
+id = "3d6279d5-d4d7-404f-bb8e-763391f2c293"
+name = "flag joint 103"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    -0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 105
+
+[[nodes.children]]
+id = "94bbef28-0093-4b0d-aa68-4c415d911756"
+name = "flag joint 104"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.0,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 106
+
+[[nodes.children]]
+id = "79cfa100-aa1b-434e-a065-84e15848f485"
+name = "flag joint 105"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 107
+
+[[nodes.children]]
+id = "b8c9861d-4137-4103-a755-1510d2e9ddeb"
+name = "flag joint 106"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 108
+
+[[nodes.children]]
+id = "c03bf9d3-c5f3-4f49-81c5-aab12b59e677"
+name = "flag joint 107"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 109
+
+[[nodes.children]]
+id = "5088cbfc-12e6-4c6e-ab22-f97a032ed8b0"
+name = "flag joint 108"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 110
+
+[[nodes.children]]
+id = "41a10d6e-b6a3-4d65-b94b-c24b11cc849d"
+name = "flag joint 109"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 111
+
+[[nodes.children]]
+id = "2ac8a957-9011-439d-9d73-7effc3863aee"
+name = "flag joint 110"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 112
+
+[[nodes.children]]
+id = "c02cca70-6abe-4ac9-af73-f7b613eb5ea6"
+name = "flag joint 111"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 113
+
+[[nodes.children]]
+id = "15da6050-2c30-412e-81a8-c3792beb795d"
+name = "flag joint 112"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 114
+
+[[nodes.children]]
+id = "2b657b97-1371-48f4-8312-a690bb4cef6f"
+name = "flag joint 113"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.05000000074505806,
+    0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 115
+
+[[nodes.children]]
+id = "2f90c6f7-db23-4075-9cd2-cf17009f6e6a"
+name = "flag joint 114"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    -0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 116
+
+[[nodes.children]]
+id = "849de806-06aa-409b-a552-db0ff21c2ade"
+name = "flag joint 115"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    -0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 117
+
+[[nodes.children]]
+id = "b6d1ce00-1981-4bf6-a9b0-c11ebf583bd6"
+name = "flag joint 116"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    -0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 118
+
+[[nodes.children]]
+id = "8b681830-33ea-48fb-8d4c-e8fdbbb87731"
+name = "flag joint 117"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    -0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 119
+
+[[nodes.children]]
+id = "6f17b506-af18-405c-89aa-3a4f30576d9f"
+name = "flag joint 118"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    -0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 120
+
+[[nodes.children]]
+id = "26eacf17-8e90-41eb-95b9-f3773313b119"
+name = "flag joint 119"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    -0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 121
+
+[[nodes.children]]
+id = "4e352c06-a813-422b-9e53-a81c2421eb6f"
+name = "flag joint 120"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    -0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 122
+
+[[nodes.children]]
+id = "e1accf82-7cd8-472c-a4fa-a59bed1ba0e7"
+name = "flag joint 121"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    -0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 123
+
+[[nodes.children]]
+id = "0aaafce0-9d92-4f93-894c-0f3f1da5ef93"
+name = "flag joint 122"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    -0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 124
+
+[[nodes.children]]
+id = "49027239-e454-445c-906f-275d71ecafb1"
+name = "flag joint 123"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.0,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 125
+
+[[nodes.children]]
+id = "3f2ba772-f59d-469b-9551-7fb113c3b3f9"
+name = "flag joint 124"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 126
+
+[[nodes.children]]
+id = "8462d94e-01a2-4f6f-8de1-d8d0aaf9379f"
+name = "flag joint 125"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 127
+
+[[nodes.children]]
+id = "dcceab52-5a2c-43be-8cc0-5eea323a0d97"
+name = "flag joint 126"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 128
+
+[[nodes.children]]
+id = "bf15f894-bcf2-40ba-84ed-f600f5f0491f"
+name = "flag joint 127"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 129
+
+[[nodes.children]]
+id = "d442961f-79fc-45f5-b460-6cc097452cbd"
+name = "flag joint 128"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 130
+
+[[nodes.children]]
+id = "6eabb55a-19dc-4d6f-9cb0-2444748259be"
+name = "flag joint 129"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 131
+
+[[nodes.children]]
+id = "28e4f454-701c-42f2-b8d3-124f276a326b"
+name = "flag joint 130"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 132
+
+[[nodes.children]]
+id = "36be9042-6c40-4d70-a05a-73c708c3f8f1"
+name = "flag joint 131"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 133
+
+[[nodes.children]]
+id = "0980acfa-4b23-4bd6-b2ba-c96d0d6020c4"
+name = "flag joint 132"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.10000000149011612,
+    0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 134
+
+[[nodes.children]]
+id = "7c4dfe6c-0f33-41f9-a4db-ec9d64796cdf"
+name = "flag joint 133"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    -0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 135
+
+[[nodes.children]]
+id = "32f72f73-e010-4d53-ae9f-1fc89462a2ec"
+name = "flag joint 134"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    -0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 136
+
+[[nodes.children]]
+id = "09bd49b8-03ef-4165-a4f5-41a41b5e8a3a"
+name = "flag joint 135"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    -0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 137
+
+[[nodes.children]]
+id = "60d42f92-648c-481a-99ac-b6ee1cb9baa5"
+name = "flag joint 136"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    -0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 138
+
+[[nodes.children]]
+id = "5ebce9e4-5260-4a90-acfd-73d11c996573"
+name = "flag joint 137"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    -0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 139
+
+[[nodes.children]]
+id = "88aa6e3f-91aa-41b1-b279-b936c259c9e3"
+name = "flag joint 138"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    -0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 140
+
+[[nodes.children]]
+id = "d20f4424-b1fd-4b67-a215-0374067a8ca3"
+name = "flag joint 139"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    -0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 141
+
+[[nodes.children]]
+id = "46c24a8e-4524-450d-8489-adc968f1e0f8"
+name = "flag joint 140"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    -0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 142
+
+[[nodes.children]]
+id = "5f5ca3b8-7390-4c81-833d-e386ab3c2596"
+name = "flag joint 141"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    -0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 143
+
+[[nodes.children]]
+id = "7ef3e767-ee5e-4fec-90f7-4cd8efc78e58"
+name = "flag joint 142"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.0,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 144
+
+[[nodes.children]]
+id = "eb34f2aa-a2ec-48b4-a3ca-0106621c26c7"
+name = "flag joint 143"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 145
+
+[[nodes.children]]
+id = "6b1998b7-f0e9-4733-b7b5-84df7399d818"
+name = "flag joint 144"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 146
+
+[[nodes.children]]
+id = "b95436e5-5291-43fd-acc9-43044e8e4dbd"
+name = "flag joint 145"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 147
+
+[[nodes.children]]
+id = "774d4ee2-0271-49c1-b793-9b322b181181"
+name = "flag joint 146"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 148
+
+[[nodes.children]]
+id = "7366a384-9c48-4887-9083-7668b5dd89dc"
+name = "flag joint 147"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 149
+
+[[nodes.children]]
+id = "e5e981fe-8708-430a-8a5d-a2a023314774"
+name = "flag joint 148"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 150
+
+[[nodes.children]]
+id = "90c60651-c218-4593-b5ec-5c5352badd3d"
+name = "flag joint 149"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 151
+
+[[nodes.children]]
+id = "adbc80ac-69c6-4bec-9237-d23425679576"
+name = "flag joint 150"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 152
+
+[[nodes.children]]
+id = "6511fa48-0ca3-4909-b6c3-a395a3fea4bc"
+name = "flag joint 151"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.15000000596046448,
+    0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 153
+
+[[nodes.children]]
+id = "8fdfdcfa-6ecf-4483-b5a0-a930ce13f49b"
+name = "flag joint 152"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    -0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 154
+
+[[nodes.children]]
+id = "bd8441e9-8945-47e2-9b2f-899aaf5b2cb6"
+name = "flag joint 153"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    -0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 155
+
+[[nodes.children]]
+id = "44cda199-0635-4fad-b8ba-67ffd5f5376c"
+name = "flag joint 154"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    -0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 156
+
+[[nodes.children]]
+id = "0da3e832-f69d-46a5-a314-839d5e6dddee"
+name = "flag joint 155"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    -0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 157
+
+[[nodes.children]]
+id = "32495a5b-6e9e-4602-acc6-929937d3d0e1"
+name = "flag joint 156"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    -0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 158
+
+[[nodes.children]]
+id = "78531216-0316-46ad-9b2a-f9420d3fae2f"
+name = "flag joint 157"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    -0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 159
+
+[[nodes.children]]
+id = "99ab43f8-19ce-4694-ab6f-6d354abf8557"
+name = "flag joint 158"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    -0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 160
+
+[[nodes.children]]
+id = "591846b4-a24e-45a3-81f0-b0609de59a51"
+name = "flag joint 159"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    -0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 161
+
+[[nodes.children]]
+id = "357eb6ed-53e5-4bfa-997d-fe2c76b03752"
+name = "flag joint 160"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    -0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 162
+
+[[nodes.children]]
+id = "a1024bb1-fd5d-4424-81e2-548ef5ff153c"
+name = "flag joint 161"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.0,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 163
+
+[[nodes.children]]
+id = "cdc98474-ce1d-451e-9878-38a5ae337f1b"
+name = "flag joint 162"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.05000000074505806,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 164
+
+[[nodes.children]]
+id = "e1383d5d-ded4-4939-a2c6-6f3814351d11"
+name = "flag joint 163"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.10000000149011612,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 165
+
+[[nodes.children]]
+id = "4bb786f1-b550-490d-a622-b6c804706ba8"
+name = "flag joint 164"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.15000000596046448,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 166
+
+[[nodes.children]]
+id = "08a4b59c-297e-46de-9f5d-2d917cea7253"
+name = "flag joint 165"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.20000000298023224,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 167
+
+[[nodes.children]]
+id = "b1967e4f-841d-4e2a-ba35-87a41e97f7c1"
+name = "flag joint 166"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.25,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 168
+
+[[nodes.children]]
+id = "96067f25-4c3f-47b1-8d3d-09205e13124c"
+name = "flag joint 167"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.30000001192092896,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 169
+
+[[nodes.children]]
+id = "51a05b65-ad45-4a8b-9919-40ecea27262c"
+name = "flag joint 168"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.3499999940395355,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 170
+
+[[nodes.children]]
+id = "98a4e69f-0a7a-4fcc-8c53-0cd6d432d8b7"
+name = "flag joint 169"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.4000000059604645,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 171
+
+[[nodes.children]]
+id = "ea699970-03b9-43ba-893d-54baff4740fa"
+name = "flag joint 170"
+kind = "group"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.20000000298023224,
+    0.44999998807907104,
+    1.5,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.mujoco.body]
+body_id = 172
+
+[[nodes.children]]
+id = "2fcfbb1f-e4f4-4892-8a8a-c40cf4242924"
+name = "flag"
+locked = true
+visible = true
+prefab = false
+children = []
+
+[nodes.children.transform]
+translation = [
+    0.0,
+    0.0,
+    0.0,
+]
+rotation = [
+    0.0,
+    0.0,
+    0.0,
+    1.0,
+]
+scale = [
+    1.0,
+    1.0,
+    1.0,
+]
+
+[nodes.children.kind.skinned_mesh]
+selected_variant = "7a1c2e40-0000-4000-8000-0000000f1a62"
+
+[nodes.children.kind.skinned_mesh.skin]
+source = "e71eaf3b-479d-4af7-81b3-fc398f857a6f"
+node_index = 0
+rig_node_index = 0
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "470ca336-b3ef-4ac8-8e67-aa81c7ff5c10"
+index = 1
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "4b77f351-be9e-4737-a85c-ceffabd48480"
+index = 2
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "21dfef51-728f-4236-abb5-08e2199f0d50"
+index = 3
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "0d7ca2ec-a59d-4bca-8243-a4e0bdfcf586"
+index = 4
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "10713474-b4b4-43d8-bf4d-75c280487291"
+index = 5
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "030bc2ae-847e-4501-a4c9-b50ec1fd66a2"
+index = 6
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "ec43ebad-da94-45ae-8e36-4dd0e3489705"
+index = 7
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "4c9453f9-8f59-4f24-8962-c8219127b0d7"
+index = 8
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "c713f41f-8a84-4ef8-bbd4-9880db74367f"
+index = 9
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "4b0c017f-7c2c-4a39-9b90-1ffc8a0a6752"
+index = 10
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "76f7a52a-67a1-4403-942f-544e9cbc1b23"
+index = 11
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "951846e8-9efa-41ae-b38f-d3d7d2e70c1d"
+index = 12
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "2623317b-79c3-46d8-a9f4-68c4112163c2"
+index = 13
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "f8b09ebc-eb36-4a1e-92ac-1bfc89bf58a9"
+index = 14
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "3c052a77-e202-41b2-a114-62b2b003ba45"
+index = 15
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "5eebd4d4-f0b0-481b-950f-b162e605ec7c"
+index = 16
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "98a5b221-2211-47e2-a792-32a27ee9e15d"
+index = 17
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "d727d4a3-7038-4450-8c17-f5d3a9372d8e"
+index = 18
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "8179c972-671c-4d89-ac31-b3f2f13aab81"
+index = 19
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "a26d503c-902f-44c2-a974-df0ad5d608a1"
+index = 20
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "cbcca32f-7020-49aa-be0d-0643bb172467"
+index = 21
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "a6149a9c-2665-46aa-9cce-e43599a15219"
+index = 22
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "823a394a-f6f3-4bc8-b835-720c49fc59bf"
+index = 23
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "139aee8a-6934-4076-a230-72bf9291b4fe"
+index = 24
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "94443526-6524-422b-9b2b-81553dc4a6ce"
+index = 25
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "74868f66-f7bd-4199-9d93-9ab5cdf9eed2"
+index = 26
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "37c6429a-a116-45f3-9bbc-0a9a5a3d3962"
+index = 27
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "5b650e11-0099-47e6-87c3-710be9b4e7f8"
+index = 28
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "e091be29-dab8-46df-a0be-08b56452b512"
+index = 29
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "a219a5eb-eb90-4903-973c-eadbfd1fc4d7"
+index = 30
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "baa56d39-d6e6-40d5-a14b-b36d344f1326"
+index = 31
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "405455a6-72ae-4c7d-97bb-ea0a8298106a"
+index = 32
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "61342012-cf5c-4935-8efd-7837664b7818"
+index = 33
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "2e72629a-26da-477d-923c-4c864f3c9df2"
+index = 34
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "3d9a0650-51da-4c43-bfab-b66368b96e1a"
+index = 35
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "70dd3410-be96-47d9-8882-dbcdffcb423b"
+index = 36
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "45ba3f7d-9296-4cc1-b116-b94729f06e6d"
+index = 37
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "c3cff673-8388-49df-bd53-400393060483"
+index = 38
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "82997f78-2100-4b65-afaf-390a388e9ad5"
+index = 39
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "de71109d-d7b5-415e-b709-586c33dcc933"
+index = 40
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "dbf652de-2936-4be9-baed-93e71003e532"
+index = 41
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "67cc8b54-78fd-4467-824d-0882112b91a4"
+index = 42
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "6c570c35-be7d-4342-b353-d3095ff706e5"
+index = 43
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "dcb6448e-c300-48db-bfbb-58e0259aa887"
+index = 44
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "d819bfb9-f23a-4b2f-99f4-9ece962f30b2"
+index = 45
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "978a6f72-a12a-4363-b219-83191cda37d5"
+index = 46
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "a4770233-e892-4644-a1f1-67fe03d6b682"
+index = 47
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "fcb31e5b-9050-470e-ab22-3aa18cde24d4"
+index = 48
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "5fda4b95-7116-4029-b24d-dbe79ff2bdce"
+index = 49
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "9f5f9049-538f-492b-a9e6-aa7be42826af"
+index = 50
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "bd1a9d3b-ec5f-4fa2-afba-2d090b198a75"
+index = 51
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "f442c1c0-65b1-40f4-8f70-56f6153e01c7"
+index = 52
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "ac6ec7b9-ed03-4bb0-8f81-497047165a52"
+index = 53
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "c4ba0a84-fcb6-41d7-8bbe-fa58ad9dd3fe"
+index = 54
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "175f08eb-4b01-424b-9dbb-e223e784b293"
+index = 55
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "a9dd9bc5-8f11-4b50-a0bf-b816cb027d72"
+index = 56
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "ea5551cc-2079-460d-8ece-bff73d58b3bb"
+index = 57
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "2b978c96-577a-452e-a9fc-7c8ec3b365b7"
+index = 58
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "53a0987e-574b-42a8-87b8-da88fe2069d9"
+index = 59
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "b0968647-f404-4b39-953e-50b37862c1ce"
+index = 60
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "839d7d4a-20a3-411e-8a0a-a53868fc627f"
+index = 61
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "0927e0e8-bad4-4bf3-9ab1-54fbc02e351e"
+index = 62
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "7ff787ed-fa1f-490e-89d2-d9fe277c3616"
+index = 63
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "bdb1bb2a-100d-4449-a694-4484c6ec4050"
+index = 64
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "e6fa6b54-ad4f-474a-99fc-1123f4e34e34"
+index = 65
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "1b232f98-9357-458d-8046-20104b0e6731"
+index = 66
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "b0d21487-e7d7-42d0-a7d7-b64c9edc9916"
+index = 67
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "17d56849-4db2-4747-a0cf-47e5fa1b6c66"
+index = 68
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "d8d15f51-0a47-4537-8085-619825db341f"
+index = 69
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "891c673f-2083-4380-b7b8-d2e34367cbe7"
+index = 70
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "8111da27-f46e-470d-babd-ef01ba0a1c2e"
+index = 71
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "7441eb00-2b23-4c63-9374-7d16d083ae46"
+index = 72
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "67c96d31-8f54-4711-8961-000ba938f1e1"
+index = 73
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "5ee6a1e1-ff4a-4b72-b878-b00bcf863f8f"
+index = 74
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "8aad24e1-709c-47fe-94df-daa0879008ac"
+index = 75
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "fda1758e-80d2-46ef-baa4-88745261cfef"
+index = 76
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "318e0df8-24c2-4346-98c0-cc5780ab7627"
+index = 77
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "a4d4f78b-0763-457d-8419-4e3a9eff659a"
+index = 78
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "3812a08f-d610-4e48-b8fd-b39f19cfb2de"
+index = 79
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "2b298222-ff23-45cb-9b85-b8ecd61c7cbd"
+index = 80
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "789a6574-ea16-43f2-b163-a933c0731764"
+index = 81
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "d05a4bdc-4247-4c4f-a2f7-7e7d31cd8a7c"
+index = 82
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "5769fefd-ca08-44d9-8149-b30b6b79bae1"
+index = 83
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "c96c11cb-75fc-4f58-aae9-d83d3589e4a4"
+index = 84
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "58e0ea5b-f0af-4ec5-8315-c81bb1c5df93"
+index = 85
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "456de193-6973-47bf-80af-e1eaf359fe4f"
+index = 86
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "56f41a7b-a882-4eed-8104-a24a54291e33"
+index = 87
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "9996aee6-c620-42e7-883f-da444d5201ba"
+index = 88
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "4d1ca542-8949-4668-916a-d52229cf49bf"
+index = 89
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "d997f56f-4728-4878-b168-916d1ac49345"
+index = 90
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "2863ce9f-bb0e-45f0-86e2-79e2fd450eab"
+index = 91
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "774e7a86-842d-4ea8-acd1-bb059da5883e"
+index = 92
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "aee94bc7-b8d6-4221-a35c-b7d7f2ee2bc5"
+index = 93
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "ff411a1a-45bc-4ad1-8387-65debe83c582"
+index = 94
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "062b337a-c72e-4576-a4ce-4d90c7e9120c"
+index = 95
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "2c565204-c11c-429b-88f5-5ac2aff9bb69"
+index = 96
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "878f3334-46a7-48d6-ada1-bfb8613a55d9"
+index = 97
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "b556197b-a908-4b9e-a185-c1c7004c8462"
+index = 98
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "ce2fcaf5-e0c3-48ea-987d-5ece96d158e1"
+index = 99
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "9e7bdfed-c1c7-40fb-a38b-14cab37b7083"
+index = 100
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "a3560699-9c76-47b4-8897-d57e2b824e6e"
+index = 101
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "d42b2aad-754e-43cc-86e5-338498f7c9f2"
+index = 102
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "5e907644-5a9e-4a77-b723-4fb9815d40ca"
+index = 103
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "3d6279d5-d4d7-404f-bb8e-763391f2c293"
+index = 104
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "94bbef28-0093-4b0d-aa68-4c415d911756"
+index = 105
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "79cfa100-aa1b-434e-a065-84e15848f485"
+index = 106
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "b8c9861d-4137-4103-a755-1510d2e9ddeb"
+index = 107
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "c03bf9d3-c5f3-4f49-81c5-aab12b59e677"
+index = 108
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "5088cbfc-12e6-4c6e-ab22-f97a032ed8b0"
+index = 109
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "41a10d6e-b6a3-4d65-b94b-c24b11cc849d"
+index = 110
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "2ac8a957-9011-439d-9d73-7effc3863aee"
+index = 111
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "c02cca70-6abe-4ac9-af73-f7b613eb5ea6"
+index = 112
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "15da6050-2c30-412e-81a8-c3792beb795d"
+index = 113
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "2b657b97-1371-48f4-8312-a690bb4cef6f"
+index = 114
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "2f90c6f7-db23-4075-9cd2-cf17009f6e6a"
+index = 115
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "849de806-06aa-409b-a552-db0ff21c2ade"
+index = 116
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "b6d1ce00-1981-4bf6-a9b0-c11ebf583bd6"
+index = 117
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "8b681830-33ea-48fb-8d4c-e8fdbbb87731"
+index = 118
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "6f17b506-af18-405c-89aa-3a4f30576d9f"
+index = 119
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "26eacf17-8e90-41eb-95b9-f3773313b119"
+index = 120
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "4e352c06-a813-422b-9e53-a81c2421eb6f"
+index = 121
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "e1accf82-7cd8-472c-a4fa-a59bed1ba0e7"
+index = 122
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "0aaafce0-9d92-4f93-894c-0f3f1da5ef93"
+index = 123
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "49027239-e454-445c-906f-275d71ecafb1"
+index = 124
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "3f2ba772-f59d-469b-9551-7fb113c3b3f9"
+index = 125
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "8462d94e-01a2-4f6f-8de1-d8d0aaf9379f"
+index = 126
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "dcceab52-5a2c-43be-8cc0-5eea323a0d97"
+index = 127
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "bf15f894-bcf2-40ba-84ed-f600f5f0491f"
+index = 128
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "d442961f-79fc-45f5-b460-6cc097452cbd"
+index = 129
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "6eabb55a-19dc-4d6f-9cb0-2444748259be"
+index = 130
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "28e4f454-701c-42f2-b8d3-124f276a326b"
+index = 131
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "36be9042-6c40-4d70-a05a-73c708c3f8f1"
+index = 132
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "0980acfa-4b23-4bd6-b2ba-c96d0d6020c4"
+index = 133
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "7c4dfe6c-0f33-41f9-a4db-ec9d64796cdf"
+index = 134
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "32f72f73-e010-4d53-ae9f-1fc89462a2ec"
+index = 135
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "09bd49b8-03ef-4165-a4f5-41a41b5e8a3a"
+index = 136
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "60d42f92-648c-481a-99ac-b6ee1cb9baa5"
+index = 137
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "5ebce9e4-5260-4a90-acfd-73d11c996573"
+index = 138
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "88aa6e3f-91aa-41b1-b279-b936c259c9e3"
+index = 139
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "d20f4424-b1fd-4b67-a215-0374067a8ca3"
+index = 140
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "46c24a8e-4524-450d-8489-adc968f1e0f8"
+index = 141
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "5f5ca3b8-7390-4c81-833d-e386ab3c2596"
+index = 142
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "7ef3e767-ee5e-4fec-90f7-4cd8efc78e58"
+index = 143
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "eb34f2aa-a2ec-48b4-a3ca-0106621c26c7"
+index = 144
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "6b1998b7-f0e9-4733-b7b5-84df7399d818"
+index = 145
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "b95436e5-5291-43fd-acc9-43044e8e4dbd"
+index = 146
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "774d4ee2-0271-49c1-b793-9b322b181181"
+index = 147
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "7366a384-9c48-4887-9083-7668b5dd89dc"
+index = 148
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "e5e981fe-8708-430a-8a5d-a2a023314774"
+index = 149
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "90c60651-c218-4593-b5ec-5c5352badd3d"
+index = 150
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "adbc80ac-69c6-4bec-9237-d23425679576"
+index = 151
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "6511fa48-0ca3-4909-b6c3-a395a3fea4bc"
+index = 152
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "8fdfdcfa-6ecf-4483-b5a0-a930ce13f49b"
+index = 153
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "bd8441e9-8945-47e2-9b2f-899aaf5b2cb6"
+index = 154
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "44cda199-0635-4fad-b8ba-67ffd5f5376c"
+index = 155
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "0da3e832-f69d-46a5-a314-839d5e6dddee"
+index = 156
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "32495a5b-6e9e-4602-acc6-929937d3d0e1"
+index = 157
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "78531216-0316-46ad-9b2a-f9420d3fae2f"
+index = 158
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "99ab43f8-19ce-4694-ab6f-6d354abf8557"
+index = 159
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "591846b4-a24e-45a3-81f0-b0609de59a51"
+index = 160
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "357eb6ed-53e5-4bfa-997d-fe2c76b03752"
+index = 161
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "a1024bb1-fd5d-4424-81e2-548ef5ff153c"
+index = 162
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "cdc98474-ce1d-451e-9878-38a5ae337f1b"
+index = 163
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "e1383d5d-ded4-4939-a2c6-6f3814351d11"
+index = 164
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "4bb786f1-b550-490d-a622-b6c804706ba8"
+index = 165
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "08a4b59c-297e-46de-9f5d-2d917cea7253"
+index = 166
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "b1967e4f-841d-4e2a-ba35-87a41e97f7c1"
+index = 167
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "96067f25-4c3f-47b1-8d3d-09205e13124c"
+index = 168
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "51a05b65-ad45-4a8b-9919-40ecea27262c"
+index = 169
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "98a4e69f-0a7a-4fcc-8c53-0cd6d432d8b7"
+index = 170
+
+[[nodes.children.kind.skinned_mesh.skin.joints]]
+node = "ea699970-03b9-43ba-893d-54baff4740fa"
+index = 171
+
+[[nodes.children.kind.skinned_mesh.material_variants]]
+id = "a5a5fe84-1acb-47a2-a3ab-7dc0e1ba0009"
+name = "rgba 0.50 0.50 0.50"
+
+[nodes.children.kind.skinned_mesh.material_variants.instance]
+asset = "4cb358bc-c6ae-493c-a03e-0b8a618de9af"
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.inline]
+label = "rgba 0.50 0.50 0.50"
+base_color = [
+    0.5,
+    0.5,
+    0.5,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.699999988079071
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = false
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.buffer_overrides]
+
+[[nodes.children.kind.skinned_mesh.material_variants]]
+id = "7a1c2e40-0000-4000-8000-0000000f1a62"
+name = "cloth"
+
+[nodes.children.kind.skinned_mesh.material_variants.instance]
+asset = "7a1c2e40-0000-4000-8000-0000000f1a61"
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.inline]
+label = "flag cloth"
+base_color = [
+    0.75,
+    0.11999999731779099,
+    0.10000000149011612,
+    1.0,
+]
+metallic = 0.0
+roughness = 0.8500000238418579
+emissive = [
+    0.0,
+    0.0,
+    0.0,
+]
+normal_scale = 1.0
+occlusion_strength = 1.0
+ssr_mask = 1.0
+double_sided = true
+vertex_colors_enabled = false
+alpha_mode = "opaque"
+shading = "pbr"
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.inline.extensions]
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.uniform_overrides]
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.texture_overrides]
+
+[nodes.children.kind.skinned_mesh.material_variants.instance.buffer_overrides]
+
+[nodes.children.kind.skinned_mesh.shadow]
+cast = true
+receive = true
+
+[nodes.children.kind.skinned_mesh.lod]
+kind = "none"
+
+[nodes.children.mujoco.flex]
+flex_id = 0
+group = 0
+vertex_count = 171
+body_attached = true

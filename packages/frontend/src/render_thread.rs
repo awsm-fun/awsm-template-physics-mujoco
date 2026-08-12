@@ -32,8 +32,8 @@ use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 
 use crate::protocol::{
-    contact_offset, inertia_offset, joint_offset, CameraMsg, RenderMsg, ResizeMsg, CONTACT_STRIDE,
-    JOINT_STRIDE, MAX_CONTACTS, POSE_HEADER, POSE_STRIDE,
+    body_offset, contact_offset, inertia_offset, joint_offset, CameraMsg, RenderMsg, ResizeMsg,
+    CONTACT_STRIDE, JOINT_STRIDE, MAX_CONTACTS, POSE_HEADER, POSE_STRIDE,
 };
 
 /// The boxed RAF callback, self-referenced so the render loop can reschedule
@@ -101,6 +101,12 @@ struct SimLink {
     joints: Option<JointOverlay>,
     /// The inertia-box debug overlay, when it was built.
     inertia: Option<InertiaOverlay>,
+    /// Body world poses + their copy target — the channel that deforms flexes.
+    ///
+    /// `None` when the scene's instance binds no node to any body, which is the
+    /// case for every model without a deformable (the humanoid included). The
+    /// sim publishes the region regardless; nobody is listening.
+    bodies: Option<(js_sys::Float32Array, Vec<f32>)>,
 }
 
 /// The inertia-box overlay: per body, the box that would have the same mass and
@@ -182,6 +188,12 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
             format!("{base}/vendor/basis/basis_transcoder.js"),
         ));
     }
+    // Which bundle directory to load — main picked it from `?scene=` and passed
+    // the NAME, since this worker's own base is a `blob:` with no query at all.
+    let bundle_dir = js_sys::Reflect::get(&payload, &JsValue::from_str("bundle"))
+        .ok()
+        .and_then(|v| v.as_string())
+        .unwrap_or_else(|| "bundle".to_string());
     // Debug overlays are opt-in (`?contacts` in the page URL); main reads it,
     // because this worker's own base is a `blob:` with no query at all.
     let show_contacts = js_sys::Reflect::get(&payload, &JsValue::from_str("contacts"))
@@ -208,6 +220,7 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
             gpu_builder,
             canvas_handle,
             origin,
+            bundle_dir,
             show_contacts,
             show_joints,
             show_inertia,
@@ -227,6 +240,7 @@ async fn run(
     gpu_builder: awsm_renderer::core::renderer::AwsmRendererWebGpuBuilder,
     canvas: web_sys::OffscreenCanvas,
     origin: String,
+    bundle_dir: String,
     show_contacts: bool,
     show_joints: bool,
     show_inertia: bool,
@@ -254,7 +268,7 @@ async fn run(
     post_progress("render worker: WebGPU device + renderer ready");
 
     // ── Warm-up + scene fetch, CONCURRENTLY ─────────────────────────────────
-    let bundle_base = format!("{}/bundle", origin.trim_end_matches('/'));
+    let bundle_base = format!("{}/{bundle_dir}", origin.trim_end_matches('/'));
     let scene_url = format!("{bundle_base}/scene.toml");
     post_progress("compiling core render pipelines + fetching scene… (first visit can take a while — cached after)");
     let (compiled, scene) =
@@ -413,6 +427,9 @@ fn apply_poses(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
     if let Some(overlay) = &mut m.inertia {
         overlay.region.copy_to(&mut overlay.scratch[..]);
     }
+    if let Some((region, scratch)) = &mut m.bodies {
+        region.copy_to(&mut scratch[..]);
+    }
     let seq1 = js_sys::Atomics::load(&m.header, 0).unwrap_or(-1);
     if seq0 != seq1 {
         return; // torn — writer was mid-publish
@@ -422,6 +439,22 @@ fn apply_poses(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
         awsm_renderer_scene_loader::mujoco::apply_geom_poses(r, &m.instance, &m.scratch)
     {
         tracing::warn!("pose sink: {err}");
+    }
+    // The second real channel, right next to the first: this is the whole of
+    // what it takes to drive a deformable. The flex is a skinned mesh, so
+    // moving its joints IS deforming it.
+    //
+    // The sink resolves those joints through the loader's skin bridge, not
+    // through the bone nodes' own scene transforms — a skin reads the rig glb's
+    // baked joint transforms, and writing the scene ones moves transforms
+    // nothing is skinned to (every frame applies, nothing errors, the cloth
+    // never leaves its bind pose).
+    if let Some((_, scratch)) = &m.bodies {
+        if let Err(err) =
+            awsm_renderer_scene_loader::mujoco::apply_body_poses(r, &m.instance, scratch)
+        {
+            tracing::warn!("body pose sink: {err}");
+        }
     }
     if let Some(overlay) = &mut m.contacts {
         overlay.apply(r, ncon);
@@ -751,6 +784,39 @@ fn link_sim(
         },
         false => None,
     };
+    // The body channel. Built only when the scene actually binds nodes to
+    // bodies — i.e. when the model has a deformable — since a model without one
+    // would pay a copy per frame for a sink call that moves nothing.
+    let nbody = get("nbody")?.as_f64().unwrap_or(0.0) as usize;
+    let binds_bodies = instance.bodies.iter().any(|b| b.is_some());
+    let bodies = if !binds_bodies {
+        None
+    } else if instance.bodies.len() != nbody {
+        // Same reasoning as the geom guard above: a length mismatch here would
+        // deform the flex with some other body's frame, which looks like a
+        // plausible wrong shape rather than an error.
+        return Err(JsValue::from_str(&format!(
+            "the sim is running a {nbody}-body model but the scene's instance \
+             ({}) has {} bodies — re-export the scene from the same model file",
+            instance.source.filename,
+            instance.bodies.len(),
+        )));
+    } else {
+        let offset = body_offset(ngeom, njnt, nbody);
+        Some((
+            js_sys::Float32Array::new(&sab)
+                .subarray(offset as u32, (offset + nbody * POSE_STRIDE) as u32),
+            vec![0.0; nbody * POSE_STRIDE],
+        ))
+    };
+
+    tracing::info!(
+        "body channel: bound={} of {} instance bodies, sim nbody={}",
+        instance.bodies.iter().filter(|b| b.is_some()).count(),
+        instance.bodies.len(),
+        nbody,
+    );
+
     Ok(SimLink {
         instance,
         header,
@@ -760,6 +826,7 @@ fn link_sim(
         contacts,
         joints,
         inertia,
+        bodies,
     })
 }
 

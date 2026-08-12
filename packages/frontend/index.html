@@ -122,6 +122,13 @@
          requests them. -->
     <link data-trunk rel="copy-dir" href="../../media/bundle" />
 
+    <!-- The SECOND scene's bundle (`?scene=flag`): the same export pipeline run
+         on MuJoCo's flag model, whose cloth is a *flex* — a deformable that
+         imports as an ordinary skinned mesh and is driven through the body pose
+         channel. A scene is a model plus the bundle exported from it, so this
+         one is always paired with `media/mujoco/flag.xml`. -->
+    <link data-trunk rel="copy-dir" href="../../media/bundle-flag" />
+
     <!-- The official MuJoCo wasm build (@mujoco/mujoco on npm, vendored — an
          Emscripten ES module + its .wasm), plus our physics worker that hosts
          it. Served same-origin (COEP require-corp). The worker is a MODULE
@@ -131,8 +138,9 @@
     <link data-trunk rel="copy-file" href="../../web/vendor/mujoco/mujoco.wasm" data-target-path="vendor/mujoco" />
     <link data-trunk rel="copy-file" href="../../web/workers/mujoco-worker.js" data-target-path="workers" />
 
-    <!-- The MuJoCo scene (MJCF XML) the physics worker loads — the classic
-         DeepMind humanoid (Apache-2.0, from google-deepmind/mujoco). -->
+    <!-- The MuJoCo scenes (MJCF XML) the physics worker loads — the classic
+         DeepMind humanoid and the flag (both Apache-2.0, from
+         google-deepmind/mujoco). `?scene=flag` picks the second. -->
     <link data-trunk rel="copy-dir" href="../../media/mujoco" />
 </body>
 </html>

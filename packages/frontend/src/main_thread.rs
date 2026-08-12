@@ -29,7 +29,7 @@ use web_sys::js_sys;
 use web_sys::{HtmlCanvasElement, MessageEvent, Worker, WorkerOptions, WorkerType};
 
 use crate::bootstrap::spawn_shared_worker_transfer;
-use crate::protocol::{pose_block_bytes, CameraMsg, RenderMsg, ResizeMsg};
+use crate::protocol::{pose_block_bytes, CameraMsg, RenderMsg, ResizeMsg, Scene};
 
 /// Build + mount the DOM, then start the worker pipeline.
 pub fn start() -> Result<(), JsValue> {
@@ -81,6 +81,11 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     // Debug overlays are opt-in via the page URL, and only the main thread can
     // read it — the render worker's own base is a `blob:`.
     let search = window.location().search().unwrap_or_default();
+    // Which of the two demo scenes to run (`?scene=flag`). Each is a MuJoCo
+    // model plus the player bundle exported from it; the two must always be
+    // chosen together, which is why one name picks both.
+    let scene = Scene::from_query(&search);
+    set(&payload, "bundle", &JsValue::from_str(scene.bundle_dir()));
     set(
         &payload,
         "contacts",
@@ -199,8 +204,9 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
         &init,
         "model_xml",
         &JsValue::from_str(&format!(
-            "{}/mujoco/humanoid.xml",
-            base.trim_end_matches('/')
+            "{}/mujoco/{}",
+            base.trim_end_matches('/'),
+            scene.model_xml()
         )),
     );
     mujoco.post_message(&init)?;

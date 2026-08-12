@@ -21,15 +21,18 @@
 //! i32[2]  ngeom
 //! i32[3]  ncon       LIVE contact count this frame, capped at MAX_CONTACTS
 //! f32[4 + g*7 + 0..3]  geom g world position  (MuJoCo frame, metres)
-//! f32[4 + g*7 + 3..7]  geom g world rotation  (quaternion, glam order x,y,z,w)
+//! f32[4 + g*7 + 3..7]  geom g world rotation  (quaternion, MuJoCo order w,x,y,z)
 //! f32[C + c*7 + 0..3]  contact c world position  (MuJoCo frame, metres)
 //! f32[C + c*7 + 3..6]  contact c world NORMAL    (unit, MuJoCo frame)
 //! f32[C + c*7 + 6]     contact c NORMAL FORCE    (newtons)
 //! f32[J + j*6 + 0..3]  joint j world ANCHOR      (MuJoCo frame, metres)
 //! f32[J + j*6 + 3..6]  joint j world AXIS        (unit, MuJoCo frame)
 //! f32[I + b*7 + 0..3]  body b INERTIAL position  (MuJoCo frame, metres)
-//! f32[I + b*7 + 3..7]  body b INERTIAL rotation  (quaternion, glam x,y,z,w)
-//!     where C = 4 + ngeom*7, J = C + MAX_CONTACTS*7, I = J + njnt*6
+//! f32[I + b*7 + 3..7]  body b INERTIAL rotation  (quaternion, MuJoCo w,x,y,z)
+//! f32[B + b*7 + 0..3]  body b WORLD position     (MuJoCo frame, metres)
+//! f32[B + b*7 + 3..7]  body b WORLD rotation     (quaternion, MuJoCo w,x,y,z)
+//!     where C = 4 + ngeom*7, J = C + MAX_CONTACTS*7, I = J + njnt*6,
+//!           B = I + nbody*7
 //! ```
 //!
 //! ## The contact region is a DEBUG overlay
@@ -45,6 +48,10 @@
 //! reason. A step with more contacts than the cap publishes the first
 //! `MAX_CONTACTS`; that is a visualisation losing detail, not the sim losing
 //! anything.
+//!
+//! Quaternions are in MUJOCO's `[w, x, y, z]` order, not glam's — the block IS a
+//! stream frame in the documented pose-sink convention, so a producer could dump
+//! it verbatim as a capture file and the sink takes it with no reshaping.
 //!
 //! All values little-endian f32/i32; MuJoCo's f64 state is narrowed to f32 by
 //! the worker, so the f64 question never reaches the renderer. The seqlock is
@@ -96,9 +103,25 @@ pub fn inertia_offset(ngeom: usize, njnt: usize) -> usize {
     joint_offset(ngeom) + njnt * JOINT_STRIDE
 }
 
-/// Byte size of the pose block, including all three debug regions.
+/// f32 index where the BODY region starts.
+///
+/// Unlike the three regions before it, this one is not debug tooling — it is a
+/// second real pose channel. A deformable (a MuJoCo *flex*) imports as an
+/// ordinary skinned mesh whose joints are the bodies its cage rides, so driving
+/// one is just `apply_body_poses` alongside `apply_geom_poses`: no vertex ever
+/// crosses the wire, only `nbody` frames.
+///
+/// These are BODY frames (`xpos`/`xquat`), which is not what the inertia region
+/// carries — that one holds the *inertial* frames, offset to each centre of mass
+/// and rotated onto the principal axes. Feeding one to the other's consumer
+/// would deform the mesh plausibly and wrongly.
+pub fn body_offset(ngeom: usize, njnt: usize, nbody: usize) -> usize {
+    inertia_offset(ngeom, njnt) + nbody * POSE_STRIDE
+}
+
+/// Byte size of the pose block, including the debug regions and the body poses.
 pub fn pose_block_bytes(ngeom: usize, njnt: usize, nbody: usize) -> usize {
-    (inertia_offset(ngeom, njnt) + nbody * POSE_STRIDE) * 4
+    (body_offset(ngeom, njnt, nbody) + nbody * POSE_STRIDE) * 4
 }
 
 /// Render-worker → main messages (loading progress + lifecycle).
@@ -130,4 +153,51 @@ pub enum ResizeMsg {
 pub enum CameraMsg {
     Orbit { dx: f32, dy: f32 },
     Zoom { dy: f32 },
+}
+
+/// Which demo scene the page is running (`?scene=flag`; default humanoid).
+///
+/// The template ships TWO, because no single model shows both halves of the
+/// integration. The humanoid is a rigid-body ragdoll and the subject of every
+/// debug overlay — contacts, joint axes, inertia boxes. The flag is a
+/// **deformable** (a MuJoCo *flex*), which imports as an ordinary skinned mesh
+/// and is driven through the body channel; it has almost no contacts and would
+/// make a poor showcase for the overlays, which is why it is a second scene
+/// rather than a replacement.
+///
+/// A scene is a MuJoCo model AND the player bundle exported from that same
+/// model. Mixing them is exactly how you get an instance whose geom count
+/// disagrees with the sim, so ONE name chooses both.
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
+pub enum Scene {
+    #[default]
+    Humanoid,
+    Flag,
+}
+
+impl Scene {
+    /// Pick the scene out of the page's query string.
+    pub fn from_query(search: &str) -> Self {
+        if search.contains("scene=flag") {
+            Self::Flag
+        } else {
+            Self::Humanoid
+        }
+    }
+
+    /// This scene's MJCF, relative to `media/mujoco/`.
+    pub fn model_xml(self) -> &'static str {
+        match self {
+            Self::Humanoid => "humanoid.xml",
+            Self::Flag => "flag.xml",
+        }
+    }
+
+    /// The media directory holding this scene's exported player bundle.
+    pub fn bundle_dir(self) -> &'static str {
+        match self {
+            Self::Humanoid => "bundle",
+            Self::Flag => "bundle-flag",
+        }
+    }
 }
