@@ -43,16 +43,11 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
         with:
-          shared-key: "single-player-game-physics"
+          shared-key: "physics-mujoco"
           cache-on-failure: true
 
       - name: Format
         run: cargo fmt --all -- --check
-
-      # Native Box3D build + FFI struct-layout assertions + falling-sphere
-      # smoke tests (serial AND internal-pthread-scheduler configs).
-      - name: Test box3d-sys (host)
-        run: cargo test -p box3d-sys
 
       - name: Lint (clippy, threaded wasm)
         run: task lint
