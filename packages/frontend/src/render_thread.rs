@@ -196,18 +196,17 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
         .unwrap_or_else(|| "bundle".to_string());
     // Debug overlays are opt-in (`?contacts` in the page URL); main reads it,
     // because this worker's own base is a `blob:` with no query at all.
-    let show_contacts = js_sys::Reflect::get(&payload, &JsValue::from_str("contacts"))
-        .ok()
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let show_joints = js_sys::Reflect::get(&payload, &JsValue::from_str("joints"))
-        .ok()
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
-    let show_inertia = js_sys::Reflect::get(&payload, &JsValue::from_str("inertia"))
-        .ok()
-        .and_then(|v| v.as_bool())
-        .unwrap_or(false);
+    let flag = |key: &str| {
+        js_sys::Reflect::get(&payload, &JsValue::from_str(key))
+            .ok()
+            .and_then(|v| v.as_bool())
+            .unwrap_or(false)
+    };
+    let overlays = OverlayToggles {
+        contacts: flag("contacts"),
+        joints: flag("joints"),
+        inertia: flag("inertia"),
+    };
     let canvas_handle = canvas.clone();
     post_progress("render worker: requesting WebGPU device…");
     let gpu =
@@ -216,17 +215,7 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
         .with_device_request_limits(DeviceRequestLimits::max_all());
 
     wasm_bindgen_futures::spawn_local(async move {
-        if let Err(err) = run(
-            gpu_builder,
-            canvas_handle,
-            origin,
-            bundle_dir,
-            show_contacts,
-            show_joints,
-            show_inertia,
-        )
-        .await
-        {
+        if let Err(err) = run(gpu_builder, canvas_handle, origin, bundle_dir, overlays).await {
             tracing::error!("render thread: {err:?}");
             post_to_main(&RenderMsg::Error {
                 message: format!("{err:?}"),
@@ -241,9 +230,7 @@ async fn run(
     canvas: web_sys::OffscreenCanvas,
     origin: String,
     bundle_dir: String,
-    show_contacts: bool,
-    show_joints: bool,
-    show_inertia: bool,
+    overlays: OverlayToggles,
 ) -> Result<(), JsValue> {
     use awsm_renderer::camera::CameraParams;
     use awsm_renderer::AwsmRendererBuilder;
@@ -348,9 +335,7 @@ async fn run(
         pending,
         camera.clone(),
         canvas.clone(),
-        show_contacts,
-        show_joints,
-        show_inertia,
+        overlays,
     )?;
     // Only now is the worker listening — main holds the model message until
     // this arrives.
@@ -617,6 +602,17 @@ const SPIKE_MAX: f32 = 0.35;
 /// lets impacts saturate.
 const FORCE_REF: f32 = 150.0;
 
+/// Which debug overlays the page opted into (`?contacts&joints&inertia` —
+/// parsed by MAIN, since this worker's own base is a `blob:` with no query).
+/// One value instead of three bools so the toggles travel the
+/// entry → run → onmessage → link_sim chain as a unit.
+#[derive(Clone, Copy, Default)]
+struct OverlayToggles {
+    contacts: bool,
+    joints: bool,
+    inertia: bool,
+}
+
 /// Install this worker's post-load `onmessage`: the forwarded MuJoCo model
 /// description (`kind: "mujoco-model"`), canvas resizes, and camera gestures.
 fn install_onmessage(
@@ -628,9 +624,7 @@ fn install_onmessage(
     pending: Rc<RefCell<Option<awsm_renderer_scene_loader::mujoco::MujocoInstance>>>,
     camera: Rc<RefCell<OrbitCamera>>,
     canvas: web_sys::OffscreenCanvas,
-    show_contacts: bool,
-    show_joints: bool,
-    show_inertia: bool,
+    overlays: OverlayToggles,
 ) -> Result<(), JsValue> {
     let scope = js_sys::global().unchecked_into::<web_sys::DedicatedWorkerGlobalScope>();
     let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
@@ -657,14 +651,7 @@ fn install_onmessage(
                 .clone()
                 .unwrap_or_else(|| instance.source.filename.clone());
             let mut r = cell.borrow_mut();
-            match link_sim(
-                &mut r,
-                instance,
-                &data,
-                show_contacts,
-                show_joints,
-                show_inertia,
-            ) {
+            match link_sim(&mut r, instance, &data, overlays) {
                 Ok(m) => {
                     tracing::info!("render thread: driving {label} — {bound}/{total} geoms bound");
                     post_progress(&format!("sim linked ({bound}/{total} geoms) — running"));
@@ -711,9 +698,7 @@ fn link_sim(
     r: &mut awsm_renderer::AwsmRenderer,
     instance: awsm_renderer_scene_loader::mujoco::MujocoInstance,
     data: &JsValue,
-    show_contacts: bool,
-    show_joints: bool,
-    show_inertia: bool,
+    overlays: OverlayToggles,
 ) -> Result<SimLink, JsValue> {
     let get = |key: &str| js_sys::Reflect::get(data, &JsValue::from_str(key));
     let ngeom = get("ngeom")?.as_f64().unwrap_or(0.0) as usize;
@@ -735,10 +720,11 @@ fn link_sim(
         (POSE_HEADER + ngeom * POSE_STRIDE) as u32,
     );
     tracing::info!(
-        "contact overlay: requested={show_contacts} root_transform={:?}",
+        "contact overlay: requested={} root_transform={:?}",
+        overlays.contacts,
         instance.root_transform.is_some()
     );
-    let contacts = match (show_contacts, instance.root_transform) {
+    let contacts = match (overlays.contacts, instance.root_transform) {
         (true, Some(root)) => match build_contact_overlay(r, &sab, ngeom, root) {
             Ok(o) => Some(o),
             Err(err) => {
@@ -753,7 +739,7 @@ fn link_sim(
         }
         (false, _) => None,
     };
-    let joints = match show_joints {
+    let joints = match overlays.joints {
         true => match instance
             .root_transform
             .ok_or_else(|| JsValue::from_str("the sim instance has no resolved root transform"))
@@ -770,7 +756,7 @@ fn link_sim(
     // The inertia region sits after the joint region, so its offset needs the
     // joint count even when the joint overlay itself was not built.
     let njnt = get("njnt")?.as_f64().unwrap_or(0.0) as usize;
-    let inertia = match show_inertia {
+    let inertia = match overlays.inertia {
         true => match instance
             .root_transform
             .ok_or_else(|| JsValue::from_str("the sim instance has no resolved root transform"))
@@ -788,7 +774,7 @@ fn link_sim(
     // bodies — i.e. when the model has a deformable — since a model without one
     // would pay a copy per frame for a sink call that moves nothing.
     let nbody = get("nbody")?.as_f64().unwrap_or(0.0) as usize;
-    let binds_bodies = instance.bodies.iter().any(|b| b.is_some());
+    let binds_bodies = instance.bodies.iter().any(|b| !b.is_empty());
     let bodies = if !binds_bodies {
         None
     } else if instance.bodies.len() != nbody {
@@ -812,7 +798,7 @@ fn link_sim(
 
     tracing::info!(
         "body channel: bound={} of {} instance bodies, sim nbody={}",
-        instance.bodies.iter().filter(|b| b.is_some()).count(),
+        instance.bodies.iter().filter(|b| !b.is_empty()).count(),
         instance.bodies.len(),
         nbody,
     );
