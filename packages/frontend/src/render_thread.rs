@@ -788,7 +788,7 @@ fn link_sim(
     // bodies — i.e. when the model has a deformable — since a model without one
     // would pay a copy per frame for a sink call that moves nothing.
     let nbody = get("nbody")?.as_f64().unwrap_or(0.0) as usize;
-    let binds_bodies = instance.bodies.iter().any(|b| b.is_some());
+    let binds_bodies = instance.bodies.iter().any(|b| !b.is_empty());
     let bodies = if !binds_bodies {
         None
     } else if instance.bodies.len() != nbody {
@@ -812,7 +812,7 @@ fn link_sim(
 
     tracing::info!(
         "body channel: bound={} of {} instance bodies, sim nbody={}",
-        instance.bodies.iter().filter(|b| b.is_some()).count(),
+        instance.bodies.iter().filter(|b| !b.is_empty()).count(),
         instance.bodies.len(),
         nbody,
     );

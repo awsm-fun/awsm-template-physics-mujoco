@@ -5,9 +5,11 @@
 # All dependency versions live HERE in [workspace.dependencies]; each member
 # pulls what it needs with `dep.workspace = true`.
 #
-# NOTE (development): the awsm-renderer crates are pinned to LOCAL PATHS in the
-# sibling renderer checkout (../../renderer) so renderer-side work and this
-# template iterate together. Switch back to crates.io versions for release.
+# The awsm-renderer crates are pinned to crates.io releases. For renderer-side
+# development, point them at LOCAL PATHS in the sibling checkout instead
+# (e.g. `awsm-renderer = "0.32.0"`)
+# so the renderer and this template iterate together — and switch back before
+# release.
 [workspace]
 resolver = "2"
 members = [
@@ -33,10 +35,10 @@ publish = false
 #   awsm-renderer-meshgen      runtime primitive meshes (sphere/box/cylinder/…)
 #                              for mirroring MuJoCo geoms that have no bundle
 #                              asset.
-awsm-renderer = { path = "../../renderer/packages/crates/renderer" }
-awsm-renderer-scene = { path = "../../renderer/packages/crates/scene" }
-awsm-renderer-scene-loader = { path = "../../renderer/packages/crates/scene-loader", features = ["http"] }
-awsm-renderer-meshgen = { path = "../../renderer/packages/crates/meshgen" }
+awsm-renderer = "0.32.0"
+awsm-renderer-scene = "0.32.0"
+awsm-renderer-scene-loader = { version = "0.32.0", features = ["http"] }
+awsm-renderer-meshgen = "0.32.0"
 
 # ── DOM, driven from pure Rust ──────────────────────────────────────────────
 # NOTE: the published dominator 0.5.38 is incompatible with
