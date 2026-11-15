@@ -188,8 +188,8 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
             // across releases, so a browser that cached an older transcoder
             // (wasm included: the worker carries the query over to it) would
             // otherwise pair it with the new JS. Bump with awsm-renderer.
-            format!("{base}/workers/basis-worker.js?v=0.41.1"),
-            format!("{base}/vendor/basis/basis_transcoder.js?v=0.41.1"),
+            format!("{base}/workers/basis-worker.js?v=0.42.0"),
+            format!("{base}/vendor/basis/basis_transcoder.js?v=0.42.0"),
         ));
     }
     // Which bundle directory to load — main picked it from `?scene=` and passed
