@@ -2,7 +2,7 @@
 //! workers.
 //!
 //! Flow:
-//! 1. Build the canvas + HUD, size the canvas to native resolution, transfer
+//! 1. Build the canvas + HUD, size the canvas to the chosen render resolution, transfer
 //!    it to an `OffscreenCanvas`, and spawn the **render** worker (a Rust
 //!    thread sharing this wasm module + memory).
 //! 2. Spawn the **MuJoCo** worker (`web/workers/mujoco-worker.js`, a plain JS
@@ -29,7 +29,7 @@ use web_sys::js_sys;
 use web_sys::{HtmlCanvasElement, MessageEvent, Worker, WorkerOptions, WorkerType};
 
 use crate::bootstrap::spawn_shared_worker_transfer;
-use crate::protocol::{pose_block_bytes, CameraMsg, RenderMsg, ResizeMsg, Scene};
+use crate::protocol::{pose_block_bytes, CameraMsg, RenderMsg, Scene};
 
 /// Build + mount the DOM, then start the worker pipeline.
 pub fn start() -> Result<(), JsValue> {
@@ -61,13 +61,10 @@ pub fn start() -> Result<(), JsValue> {
 fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsValue> {
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
 
-    // Native-resolution backing store (CSS size × devicePixelRatio); must be
-    // sized BEFORE the transfer.
-    let dpr = window.device_pixel_ratio().max(1.0);
-    let css_w = canvas.client_width().max(1) as f64;
-    let css_h = canvas.client_height().max(1) as f64;
-    canvas.set_width((css_w * dpr).round() as u32);
-    canvas.set_height((css_h * dpr).round() as u32);
+    // Backing store at the chosen render resolution (a stored Settings choice,
+    // else native capped at a pixel budget — see `resolution`). Must be sized
+    // BEFORE the transfer.
+    let resolution = crate::resolution::Resolution::new(&window, &canvas, "awsm_mujoco_res_scale");
     let offscreen = canvas.transfer_control_to_offscreen()?;
 
     let base = page_base(&window);
@@ -212,7 +209,8 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     mujoco.post_message(&init)?;
     *mujoco_ref.borrow_mut() = Some(mujoco);
 
-    install_resize(&window, &canvas, &render)?;
+    // Layout changes → ResizeMsg, plus the Settings modal (resolution slider).
+    resolution.install(&window, &canvas, render.clone())?;
     install_pointer(&canvas, render)?;
 
     status.set("loading scene…".into());
@@ -269,40 +267,6 @@ fn maybe_start(
         let _ = render.post_message(&model);
     }
     loading_log("pose block allocated — sim + mirror starting");
-}
-
-/// Observe the canvas element's layout size and relay changes to the render
-/// worker as [`ResizeMsg`]s in device pixels.
-fn install_resize(
-    window: &web_sys::Window,
-    canvas: &HtmlCanvasElement,
-    render: &Worker,
-) -> Result<(), JsValue> {
-    let dpr = window.device_pixel_ratio().max(1.0);
-    let render = render.clone();
-    let cb = Closure::<dyn FnMut(js_sys::Array)>::new(move |entries: js_sys::Array| {
-        let Some(entry) = entries
-            .get(0)
-            .dyn_into::<web_sys::ResizeObserverEntry>()
-            .ok()
-        else {
-            return;
-        };
-        let rect = entry.content_rect();
-        let width = (rect.width() * dpr).round() as u32;
-        let height = (rect.height() * dpr).round() as u32;
-        if width == 0 || height == 0 {
-            return;
-        }
-        if let Ok(v) = serde_wasm_bindgen::to_value(&ResizeMsg::Canvas { width, height }) {
-            let _ = render.post_message(&v);
-        }
-    });
-    let observer = web_sys::ResizeObserver::new(cb.as_ref().unchecked_ref())?;
-    observer.observe(canvas);
-    cb.forget();
-    std::mem::forget(observer);
-    Ok(())
 }
 
 /// Pointer-drag orbits, wheel zooms — deltas forwarded to the render thread's
