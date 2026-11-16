@@ -2,6 +2,14 @@
 // own wasm module + heap, separate from the app's Rust wasm) and publishes
 // geom world poses into a SharedArrayBuffer pose block.
 //
+// Timing (see "Timing" in src/protocol.rs): the render worker bumps a frame
+// tick at the start of every frame and writes that frame's time; this worker
+// wakes on the tick, steps MuJoCo at its fixed timestep as many times as the
+// elapsed time pays for, and publishes one pose slot stamped with the time
+// its state is due. The render worker interpolates between slots. With no tick
+// for TICK_TIMEOUT_MS (no renderer yet, a hidden tab) it carries on, on its
+// own clock, so a robotics run never stalls.
+//
 // Protocol (see src/protocol.rs for the block layout):
 //   main → here  {kind:"init", mujoco_js, mujoco_wasm, model_xml}
 //   here → main  {kind:"progress", message}
@@ -22,20 +30,42 @@ let njnt = 0;
 let nbody = 0;
 
 // Pose block views (set on "start").
-let header = null;   // Int32Array  [seq, steps, ngeom, ncon]
-let poses = null;    // Float32Array, 7 floats per geom after the header
-let contacts = null; // Float32Array, 7 floats per contact after the poses
-let joints = null;   // Float32Array, 6 floats per joint after the contacts
-let inertia = null;  // Float32Array, 7 floats per body after the joints
-let bodies = null;   // Float32Array, 7 floats per body after the inertia frames
+let words = null;    // Int32Array over the whole block (header + slot seq/t)
+let floats = null;   // Float32Array over the whole block
+let contacts = null; // Float32Array, the contact overlay
+let joints = null;   // Float32Array, the joint overlay
+let inertia = null;  // Float32Array, the inertia overlay
 let steps_total = 0;
+let published = 0;
 
-// Must match protocol.rs. Contacts are a DEBUG overlay: the count varies every
-// step while the block is fixed-size, so the region is preallocated and the
-// live count rides in the header.
+// Must match protocol.rs.
+const H_TICK = 0;
+const H_FRAME_TIME = 1;
+const H_TIME_VALID = 2;
+const H_NGEOM = 3;
+const H_STEPS = 4;
+const H_PUBLISHED = 5;
+const H_NCON = 6;
+const H_OVERLAY_SEQ = 7;
+const HEADER_WORDS = 16;
+const POSE_SLOTS = 8;
+const SLOT_HEADER = 2; // seq, t
+const POSE_STRIDE = 7;
+// Contacts are a DEBUG overlay: the count varies every step while the block is
+// fixed-size, so the region is preallocated and the live count rides in the
+// header.
 const MAX_CONTACTS = 256;
 const CONTACT_STRIDE = 7;
 const JOINT_STRIDE = 6;
+
+// No frame tick for this long (ms) means no renderer is drawing (not linked
+// yet, or a hidden tab): step on this worker's own clock instead. Well above
+// the slowest frame interval worth drawing, so a slow renderer never flips
+// the clock source frame to frame.
+const TICK_TIMEOUT_MS = 100;
+// Most simulated time one wake may catch up (ms): after a stall the world
+// slows down rather than freezing the worker in one enormous burst.
+const MAX_CATCHUP_MS = 250;
 
 // Scratch for mj_contactForce, which fills a 6-vector [force xyz, torque xyz]
 // in the CONTACT's frame — so element 0 is already the normal component and
@@ -121,74 +151,136 @@ async function init({ mujoco_js, mujoco_wasm, model_xml }) {
     });
 }
 
-function start(sab) {
-    header = new Int32Array(sab);
-    poses = new Float32Array(sab, 4 * 4, ngeom * 7); // skip the 4-slot i32 header
-    contacts = new Float32Array(sab, (4 + ngeom * 7) * 4, MAX_CONTACTS * CONTACT_STRIDE);
-    joints = new Float32Array(
-        sab,
-        (4 + ngeom * 7 + MAX_CONTACTS * CONTACT_STRIDE) * 4,
-        njnt * JOINT_STRIDE,
-    );
-    inertia = new Float32Array(
-        sab,
-        (4 + ngeom * 7 + MAX_CONTACTS * CONTACT_STRIDE + njnt * JOINT_STRIDE) * 4,
-        nbody * 7,
-    );
-    bodies = new Float32Array(
-        sab,
-        (4 + ngeom * 7 + MAX_CONTACTS * CONTACT_STRIDE + njnt * JOINT_STRIDE + nbody * 7) * 4,
-        nbody * 7,
-    );
-    header[2] = ngeom;
-    publish(); // the settled initial pose (mj_forward ran at init)
-    progress("stepping");
-    let last = performance.now();
-    let acc = 0;
-    const MAX_CATCHUP = 0.25; // s — cap the burst after a stall/hidden tab
-    const tick = () => {
-        const now = performance.now();
-        acc = Math.min(acc + (now - last) / 1000, MAX_CATCHUP);
-        last = now;
-        let n = Math.floor(acc / timestep);
-        if (n > 0) {
-            acc -= n * timestep;
-            for (let i = 0; i < n; i++) mujoco.mj_step(model, data);
-            steps_total += n;
-            publish();
-        }
-        setTimeout(tick, 2);
-    };
-    tick();
+function slotWords() {
+    return SLOT_HEADER + (ngeom + nbody) * POSE_STRIDE;
 }
 
-// Publish the current geom world poses under the seqlock: seq goes odd, poses
-// are written, seq goes even. Single writer; the render thread is the reader.
-function publish() {
-    Atomics.store(header, 0, header[0] + 1); // odd — writing
+function start(sab) {
+    words = new Int32Array(sab);
+    floats = new Float32Array(sab);
+    const contactsAt = HEADER_WORDS + POSE_SLOTS * slotWords();
+    const jointsAt = contactsAt + MAX_CONTACTS * CONTACT_STRIDE;
+    const inertiaAt = jointsAt + njnt * JOINT_STRIDE;
+    contacts = floats.subarray(contactsAt, jointsAt);
+    joints = floats.subarray(jointsAt, inertiaAt);
+    inertia = floats.subarray(inertiaAt, inertiaAt + nbody * 7);
+    Atomics.store(words, H_NGEOM, ngeom);
+    progress("stepping");
+    run();
+}
+
+// ── Clock ───────────────────────────────────────────────────────────────────
+//
+// Every time here is ABSOLUTE ms (performance.timeOrigin + now), the timeline
+// the render worker's frame times are on too. `fedTo` is the time up to which
+// the accumulator has been fed, whichever clock fed it, so switching between
+// the render tick and this worker's own clock never counts a stretch twice.
+
+const ownNow = () => performance.timeOrigin + performance.now();
+
+// The render worker's latest frame time as absolute ms. The block holds it as
+// wrapping microseconds; the full value is rebuilt around this worker's own
+// clock, which is within a frame or two of it.
+function frameTimeMs() {
+    const own = ownNow();
+    const ownUs = Math.round(own * 1000) % 0x1_0000_0000;
+    const t = Atomics.load(words, H_FRAME_TIME) >>> 0;
+    const diff = ((t - ownUs) | 0); // wrapping signed difference, µs
+    return own + diff / 1000;
+}
+
+function run() {
+    const stepMs = timestep * 1000;
+    let fedTo = ownNow();
+    let acc = 0; // ms of real time not yet stepped
+    let seenTick = Atomics.load(words, H_TICK);
+
+    // The settled initial pose (mj_forward ran at init), due now.
+    publish(fedTo);
+
+    const advance = (now) => {
+        acc = Math.min(acc + Math.max(now - fedTo, 0), MAX_CATCHUP_MS);
+        fedTo = Math.max(fedTo, now);
+        let n = 0;
+        while (acc >= stepMs) {
+            mujoco.mj_step(model, data);
+            acc -= stepMs;
+            n++;
+        }
+        if (n > 0) {
+            steps_total += n;
+            // The state just stepped to is due at fedTo - acc: the time the
+            // accumulator has been fed to, less what it still holds.
+            publish(fedTo - acc);
+        }
+    };
+
+    let lastTickAt = ownNow();
+    const wake = () => {
+        const tick = Atomics.load(words, H_TICK);
+        if (tick !== seenTick && Atomics.load(words, H_TIME_VALID) === 1) {
+            seenTick = tick;
+            lastTickAt = ownNow();
+            advance(frameTimeMs());
+        } else if (ownNow() - lastTickAt >= TICK_TIMEOUT_MS) {
+            // No renderer is drawing: keep the world going on our own clock.
+            seenTick = tick;
+            advance(ownNow());
+        }
+        wait();
+    };
+
+    // Atomics.waitAsync where the browser has it; otherwise a short timer
+    // that polls the tick.
+    const wait = typeof Atomics.waitAsync === "function"
+        ? () => {
+            const r = Atomics.waitAsync(words, H_TICK, seenTick, TICK_TIMEOUT_MS);
+            if (r.async) r.value.then(wake);
+            else wake();
+        }
+        : () => setTimeout(wake, 4);
+    wait();
+}
+
+// Publish the current state into the next pose slot, stamped `dueMs` (absolute
+// ms): slot seq goes odd, poses and time are written, seq goes even, then the
+// published count moves on. Single writer; the render worker is the reader.
+// The debug overlays follow under their own seqlock, outside the slot, so the
+// contact walk never holds a pose slot open.
+function publish(dueMs) {
+    const slot = published % POSE_SLOTS;
+    const base = HEADER_WORDS + slot * slotWords();
+    const seq = Atomics.load(words, base);
+    Atomics.store(words, base, seq + 1); // odd — writing
+    words[base + 1] = Math.round(dueMs * 1000) % 0x1_0000_0000 | 0;
     const xpos = data.geom_xpos;  // live f64 view, 3 per geom
     const xmat = data.geom_xmat;  // live f64 view, 9 per geom (row-major)
+    const geomsAt = base + SLOT_HEADER;
     for (let g = 0; g < ngeom; g++) {
-        const o = g * 7;
-        matToPose(xpos, xmat, g, poses, o);
+        matToPose(xpos, xmat, g, floats, geomsAt + g * 7);
     }
+    publishBodies(geomsAt + ngeom * 7);
+    Atomics.store(words, base, seq + 2); // even — stable
+    published++;
+    Atomics.store(words, H_PUBLISHED, published);
+    Atomics.store(words, H_STEPS, steps_total);
+
+    const oseq = Atomics.load(words, H_OVERLAY_SEQ);
+    Atomics.store(words, H_OVERLAY_SEQ, oseq + 1);
     publishContacts();
     publishJoints();
     publishInertia();
-    publishBodies();
-    Atomics.store(header, 1, steps_total);
-    Atomics.store(header, 0, header[0] + 1); // even — stable
+    Atomics.store(words, H_OVERLAY_SEQ, oseq + 2);
 }
 
-// Contact points + normals, inside the SAME seqlock as the poses: an overlay
-// must never draw contacts from a different step than the bodies they touch.
+// Contact points + normals (debug overlay, newest state only).
 //
 // MuJoCo gives each contact a 3x3 frame whose FIRST ROW is the normal (rows 2
 // and 3 are the tangents), pointing from geom1 toward geom2.
 function publishContacts() {
     const ncon = Math.min(data.ncon | 0, MAX_CONTACTS);
     if (ncon === 0) {
-        Atomics.store(header, 3, 0);
+        Atomics.store(words, H_NCON, 0);
         return;
     }
     // `data.contact` is an embind binding, and embind exposes a sequence as
@@ -217,7 +309,7 @@ function publishContacts() {
         if (typeof item.delete === "function") item.delete();
     }
     if (typeof contact.delete === "function") contact.delete();
-    Atomics.store(header, 3, written);
+    Atomics.store(words, H_NCON, written);
 }
 
 // Joint anchors and axes, world frame. Unlike contacts these are a FIXED-size
@@ -246,18 +338,18 @@ function publishJoints() {
 // `xquat` is already a quaternion in MuJoCo's [w,x,y,z] order — the very layout
 // the pose block wants — so unlike the geom and inertia frames there is no
 // matrix to convert.
-function publishBodies() {
+function publishBodies(at) {
     const xpos = data.xpos;   // 3 per body
     const xquat = data.xquat; // 4 per body, [w,x,y,z]
     for (let b = 0; b < nbody; b++) {
-        const o = b * 7;
-        bodies[o] = xpos[b * 3];
-        bodies[o + 1] = xpos[b * 3 + 1];
-        bodies[o + 2] = xpos[b * 3 + 2];
-        bodies[o + 3] = xquat[b * 4];
-        bodies[o + 4] = xquat[b * 4 + 1];
-        bodies[o + 5] = xquat[b * 4 + 2];
-        bodies[o + 6] = xquat[b * 4 + 3];
+        const o = at + b * 7;
+        floats[o] = xpos[b * 3];
+        floats[o + 1] = xpos[b * 3 + 1];
+        floats[o + 2] = xpos[b * 3 + 2];
+        floats[o + 3] = xquat[b * 4];
+        floats[o + 4] = xquat[b * 4 + 1];
+        floats[o + 5] = xquat[b * 4 + 2];
+        floats[o + 6] = xquat[b * 4 + 3];
     }
 }
 

@@ -11,9 +11,11 @@
 //!    (`LoadedScene::mujoco` — geom_id→transform, plus the model fingerprint),
 //!    and checks the sim is running the SAME model (content hash), refusing to
 //!    drive the wrong robot rather than producing convincing nonsense;
-//! 2. each frame, copies the latest stable snapshot out of the sim worker's
-//!    `SharedArrayBuffer` pose block (seqlock — see [`crate::protocol`]) and
-//!    hands it to `scene_loader::mujoco::apply_geom_poses`.
+//! 2. each frame, publishes its frame time to the sim worker (which steps to
+//!    it), then takes the two pose slots around its display time out of the
+//!    sim worker's `SharedArrayBuffer` pose block, blends them, and hands the
+//!    result to `scene_loader::mujoco::apply_geom_poses` (timing and layout:
+//!    see [`crate::protocol`]).
 //!
 //! The pose block is laid out as a **stream frame** in the documented
 //! convention (7 f32 per geom, `[px,py,pz,qw,qx,qy,qz]`, geom-id indexed), so
@@ -24,6 +26,7 @@
 //! resize.
 
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::rc::Rc;
 
 use glam::{Mat4, Quat, Vec3};
@@ -32,8 +35,8 @@ use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 
 use crate::protocol::{
-    body_offset, contact_offset, inertia_offset, joint_offset, CameraMsg, RenderMsg, ResizeMsg,
-    CONTACT_STRIDE, JOINT_STRIDE, MAX_CONTACTS, POSE_HEADER, POSE_STRIDE,
+    abs_ms_to_us, header, time_diff_us, CameraMsg, Layout, OrbitState, RenderMsg, ResizeMsg,
+    CONTACT_STRIDE, JOINT_STRIDE, MAX_CONTACTS, POSE_SLOTS, POSE_STRIDE,
 };
 
 /// The boxed RAF callback, self-referenced so the render loop can reschedule
@@ -45,40 +48,42 @@ const CAMERA_FOV_Y_DEG: f32 = 55.0;
 const CAMERA_NEAR: f32 = 0.1;
 const CAMERA_FAR: f32 = 400.0;
 
-/// A minimal mouse-driven orbit camera: drag to orbit, wheel to dolly. State
-/// lives here; main feeds it gesture deltas via [`CameraMsg`].
+/// The orbit camera as drawn: a fixed target, and the [`OrbitState`] main
+/// owns. Main posts its state once per main-thread frame; this keeps the last
+/// few and each frame draws the newest one at least half a frame old (see
+/// [`CameraMsg`]), so every frame shows exactly one main frame of input.
 struct OrbitCamera {
     look_at: Vec3,
-    radius: f32,
-    yaw: f32,
-    pitch: f32,
+    state: OrbitState,
+    /// `(absolute ms, state)` as main posted them, oldest first.
+    posted: VecDeque<(f64, OrbitState)>,
 }
 
 impl OrbitCamera {
-    const SENSITIVITY: f32 = 0.008;
-    const PITCH_MAX: f32 = std::f32::consts::FRAC_PI_2 - 0.01;
-    const PITCH_MIN: f32 = 0.05;
-    const MIN_RADIUS: f32 = 1.5;
-    const MAX_RADIUS: f32 = 30.0;
+    /// States kept: a few frames' worth is all the selection ever looks at.
+    const KEEP: usize = 4;
 
-    fn orbit(&mut self, dx: f32, dy: f32) {
-        self.yaw -= dx * Self::SENSITIVITY;
-        self.pitch = (self.pitch - dy * Self::SENSITIVITY).clamp(Self::PITCH_MIN, Self::PITCH_MAX);
+    fn post(&mut self, t_ms: f64, state: OrbitState) {
+        if self.posted.len() == Self::KEEP {
+            self.posted.pop_front();
+        }
+        self.posted.push_back((t_ms, state));
     }
 
-    fn zoom(&mut self, dy: f32) {
-        self.radius = (self.radius * (1.0 + dy * 0.001)).clamp(Self::MIN_RADIUS, Self::MAX_RADIUS);
+    /// Pick the state to draw at frame time `now_ms` (absolute) on a display
+    /// with frame period `period_ms`.
+    fn select(&mut self, now_ms: f64, period_ms: f64) {
+        let cutoff = now_ms - period_ms * 0.5;
+        if let Some((_, s)) = self.posted.iter().rev().find(|(t, _)| *t <= cutoff) {
+            self.state = *s;
+        }
     }
 
     fn eye(&self) -> Vec3 {
-        let (sy, cy) = self.yaw.sin_cos();
-        let (sp, cp) = self.pitch.sin_cos();
-        self.look_at
-            + Vec3::new(
-                self.radius * cp * sy,
-                self.radius * sp,
-                self.radius * cp * cy,
-            )
+        let (sy, cy) = self.state.yaw.sin_cos();
+        let (sp, cp) = self.state.pitch.sin_cos();
+        let r = self.state.radius;
+        self.look_at + Vec3::new(r * cp * sy, r * sp, r * cp * cy)
     }
 }
 
@@ -87,26 +92,29 @@ impl OrbitCamera {
 struct SimLink {
     /// The loader-resolved instance: geom_id→transform + the model fingerprint.
     instance: awsm_renderer_scene_loader::mujoco::MujocoInstance,
-    /// i32 view over the whole pose block (seq at 0, steps at 1).
-    header: js_sys::Int32Array,
-    /// f32 view over just the pose span (`POSE_HEADER..`).
-    poses: js_sys::Float32Array,
-    /// Copy target for one stable snapshot.
-    scratch: Vec<f32>,
-    /// Last successfully-applied seq — skip work when nothing new published.
-    last_seq: i32,
+    layout: Layout,
+    /// The sim's fixed step, µs.
+    dt_us: f64,
+    /// i32 and f32 views over the whole pose block.
+    words: js_sys::Int32Array,
+    floats: js_sys::Float32Array,
+    /// Copies of the two slots around the display time.
+    older: Vec<f32>,
+    newer: Vec<f32>,
+    /// The blended geom poses, then body poses, handed to the sinks.
+    geoms: Vec<f32>,
+    bodies_blend: Vec<f32>,
+    /// The frame time published last frame (absolute µs): this frame displays
+    /// `dt` before it.
+    last_frame_us: Option<u32>,
+    /// Whether the scene binds any node to a body (only flexes do).
+    drive_bodies: bool,
     /// The contact-point debug overlay, when it was built.
     contacts: Option<ContactOverlay>,
     /// The joint-axis debug overlay, when it was built.
     joints: Option<JointOverlay>,
     /// The inertia-box debug overlay, when it was built.
     inertia: Option<InertiaOverlay>,
-    /// Body world poses + their copy target — the channel that deforms flexes.
-    ///
-    /// `None` when the scene's instance binds no node to any body, which is the
-    /// case for every model without a deformable (the humanoid included). The
-    /// sim publishes the region regardless; nobody is listening.
-    bodies: Option<(js_sys::Float32Array, Vec<f32>)>,
 }
 
 /// The inertia-box overlay: per body, the box that would have the same mass and
@@ -321,9 +329,8 @@ async fn run(
     // ── Camera + shared state, then hand control to the event loop ──────────
     let camera = Rc::new(RefCell::new(OrbitCamera {
         look_at: Vec3::new(0.0, 0.8, 0.0),
-        radius: 6.0,
-        yaw: 0.35,
-        pitch: 0.35,
+        state: OrbitState::START,
+        posted: VecDeque::new(),
     }));
     #[allow(clippy::arc_with_non_send_sync)]
     let cell = Rc::new(RefCell::new(renderer));
@@ -353,22 +360,39 @@ async fn run(
     let mut frame_count: u32 = 0;
     // Presented frames and their timing, for the page's Stats panel.
     let mut frame_window = crate::stats::FrameWindow::new();
+    // This worker's clock origin: frame times are sent as absolute times, the
+    // one timeline every thread of the page shares.
+    let time_origin = crate::stats::worker_time_origin();
+    // The display's frame period (ms), smoothed: the camera's selection rule
+    // needs half of it.
+    let mut period_ms = 1000.0 / 60.0;
+    let mut prev_vsync: Option<f64> = None;
 
     *raf_init.borrow_mut() = Some(Closure::new(move |vsync_ms: f64| {
         let frame_start = crate::stats::worker_now();
+        let now_abs_ms = time_origin + vsync_ms;
+        if let Some(prev) = prev_vsync.replace(vsync_ms) {
+            let dt = vsync_ms - prev;
+            if dt > 2.0 && dt < 100.0 {
+                period_ms += (dt - period_ms) * 0.1;
+            }
+        }
         let mut r = cell.borrow_mut();
 
-        // Apply the newest stable sim snapshot (if the mirror exists yet and
-        // the sim worker has published something new).
+        // Tell the sim this frame has started, then draw the sim at the time
+        // fixed by the previous frame (see `protocol`, "Timing").
+        let mut late = false;
         if let Some(m) = mirror.borrow_mut().as_mut() {
-            apply_poses(&mut r, m);
+            let display_us = m.begin_frame(abs_ms_to_us(now_abs_ms));
+            late = apply_poses(&mut r, m, display_us);
         }
 
-        let cam = camera.borrow();
+        let mut cam = camera.borrow_mut();
+        cam.select(now_abs_ms, period_ms);
         let view = Mat4::look_at_rh(cam.eye(), cam.look_at, Vec3::Y);
         let mut params =
             CameraParams::perspective(CAMERA_FOV_Y_DEG.to_radians(), CAMERA_NEAR, CAMERA_FAR);
-        params.focus_distance = cam.radius;
+        params.focus_distance = cam.state.radius;
         let _ = r.set_camera(view, params);
         drop(cam);
 
@@ -383,7 +407,7 @@ async fn run(
             post_to_main(&RenderMsg::Ready);
         }
         let cpu_ms = crate::stats::worker_now() - frame_start;
-        if let Some(msg) = frame_window.frame(vsync_ms, cpu_ms) {
+        if let Some(msg) = frame_window.frame(vsync_ms, cpu_ms, late) {
             post_to_main(&msg);
         }
         if let Some(cb) = raf_run.borrow().as_ref() {
@@ -397,42 +421,152 @@ async fn run(
     Ok(())
 }
 
-/// Copy the latest stable pose snapshot out of the seqlock'd block and hand it
-/// to the renderer's pose sink. On a torn read (seq odd / changed under us),
-/// keep last frame's poses — the next frame catches up.
+impl SimLink {
+    /// Start of a frame at absolute time `frame_us`: publish it to the sim
+    /// (time first, then the tick, so the sim never sees a tick without its
+    /// time) and return the display time fixed by the PREVIOUS frame,
+    /// `T_(k-1) - dt`, or `None` on the first frame.
+    fn begin_frame(&mut self, frame_us: u32) -> Option<u32> {
+        let display = self
+            .last_frame_us
+            .replace(frame_us)
+            .map(|t| t.wrapping_sub(self.dt_us.round() as u32));
+        let _ = js_sys::Atomics::store(&self.words, header::FRAME_TIME, frame_us as i32);
+        let _ = js_sys::Atomics::store(&self.words, header::TIME_VALID, 1);
+        let _ = js_sys::Atomics::add(&self.words, header::TICK, 1);
+        let _ = js_sys::Atomics::notify(&self.words, header::TICK);
+        display
+    }
+
+    /// Slot `n`'s seq and time, if it holds a complete state.
+    fn slot_stamp(&self, n: u32) -> Option<(i32, u32)> {
+        let base = self.layout.slot(n as usize % POSE_SLOTS) as u32;
+        let seq = js_sys::Atomics::load(&self.words, base).ok()?;
+        if seq == 0 || seq % 2 != 0 {
+            return None;
+        }
+        let t = js_sys::Atomics::load(&self.words, base + 1).ok()? as u32;
+        Some((seq, t))
+    }
+}
+
+/// Copy slot `n` into `out` if it still holds the state stamped `seq` (the
+/// writer may have lapped the ring and be rewriting it).
+fn copy_slot(
+    words: &js_sys::Int32Array,
+    floats: &js_sys::Float32Array,
+    layout: &Layout,
+    n: u32,
+    seq: i32,
+    out: &mut [f32],
+) -> bool {
+    let base = layout.slot(n as usize % POSE_SLOTS);
+    floats
+        .subarray(base as u32, (base + layout.slot_words()) as u32)
+        .copy_to(out);
+    js_sys::Atomics::load(words, base as u32).ok() == Some(seq)
+}
+
+/// A published slot: its index, seq and time (absolute µs).
+type Stamp = (u32, i32, u32);
+
+/// Draw the sim at `display_us` (absolute µs; `None` = the newest state): find
+/// the two published slots around it, blend them, and hand the result to the
+/// renderer's pose sink. Returns `true` when the sim was late — no state at or
+/// after the display time yet — and the newest one was held instead.
 ///
-/// This is the entire per-frame cost of the integration: a seqlock read and one
-/// sink call. Every geom-to-node decision was made at import time.
-fn apply_poses(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
-    let seq0 = js_sys::Atomics::load(&m.header, 0).unwrap_or(0);
-    if seq0 == m.last_seq || seq0 % 2 != 0 || seq0 == 0 {
-        return;
+/// The writer may be lapping the ring while this reads, so every copy is
+/// checked against its slot's seq; a slot that changed underneath is dropped
+/// and the frame keeps last frame's poses. Nothing waits.
+fn apply_poses(
+    r: &mut awsm_renderer::AwsmRenderer,
+    m: &mut SimLink,
+    display_us: Option<u32>,
+) -> bool {
+    let published = js_sys::Atomics::load(&m.words, header::PUBLISHED).unwrap_or(0) as u32;
+    if published == 0 {
+        return false;
     }
-    m.poses.copy_to(&mut m.scratch[..]);
-    let seq1 = js_sys::Atomics::load(&m.header, 0).unwrap_or(-1);
-    if seq0 != seq1 {
-        return; // torn — writer was mid-publish
+    // The slot after the newest may be the one being written: stay clear of
+    // it, which leaves POSE_SLOTS - 1 readable.
+    let oldest = published.saturating_sub(POSE_SLOTS as u32 - 1);
+    let newest = published - 1;
+
+    // Walk back from the newest to the first slot at or before the display
+    // time; the one after it is the other end of the pair.
+    let mut late = false;
+    let mut pair: Option<(Stamp, Option<Stamp>)> = None;
+    match display_us {
+        None => {
+            if let Some((seq, t)) = m.slot_stamp(newest) {
+                pair = Some(((newest, seq, t), None));
+            }
+        }
+        Some(display) => {
+            let mut after: Option<Stamp> = None;
+            let mut n = newest;
+            while let Some((seq, t)) = m.slot_stamp(n) {
+                if time_diff_us(t, display) <= 0 {
+                    pair = Some(((n, seq, t), after));
+                    late = after.is_none();
+                    break;
+                }
+                after = Some((n, seq, t));
+                if n == oldest {
+                    // Every readable state is after the display time (only at
+                    // start-up): show the oldest.
+                    pair = Some(((n, seq, t), None));
+                    break;
+                }
+                n -= 1;
+            }
+        }
     }
-    let ncon = js_sys::Atomics::load(&m.header, 3).unwrap_or(0).max(0) as usize;
-    if let Some(overlay) = &mut m.contacts {
-        overlay.region.copy_to(&mut overlay.scratch[..]);
+    let Some(((n0, seq0, t0), next)) = pair else {
+        return false;
+    };
+    if !copy_slot(&m.words, &m.floats, &m.layout, n0, seq0, &mut m.older) {
+        return late;
     }
-    if let Some(overlay) = &mut m.joints {
-        overlay.region.copy_to(&mut overlay.scratch[..]);
+    let alpha_newer = match (next, display_us) {
+        (Some((n1, seq1, t1)), Some(display)) => {
+            if !copy_slot(&m.words, &m.floats, &m.layout, n1, seq1, &mut m.newer) {
+                return late;
+            }
+            let span = time_diff_us(t1, t0).max(1) as f32;
+            Some((time_diff_us(display, t0) as f32 / span).clamp(0.0, 1.0))
+        }
+        _ => None,
+    };
+
+    let geoms_at = m.layout.slot_geoms();
+    let bodies_at = m.layout.slot_bodies();
+    let ngeom = m.layout.ngeom * POSE_STRIDE;
+    let nbody = m.layout.nbody * POSE_STRIDE;
+    match alpha_newer {
+        Some(alpha) => {
+            blend_poses(
+                &m.older[geoms_at..geoms_at + ngeom],
+                &m.newer[geoms_at..geoms_at + ngeom],
+                alpha,
+                &mut m.geoms,
+            );
+            blend_poses(
+                &m.older[bodies_at..bodies_at + nbody],
+                &m.newer[bodies_at..bodies_at + nbody],
+                alpha,
+                &mut m.bodies_blend,
+            );
+        }
+        None => {
+            m.geoms
+                .copy_from_slice(&m.older[geoms_at..geoms_at + ngeom]);
+            m.bodies_blend
+                .copy_from_slice(&m.older[bodies_at..bodies_at + nbody]);
+        }
     }
-    if let Some(overlay) = &mut m.inertia {
-        overlay.region.copy_to(&mut overlay.scratch[..]);
-    }
-    if let Some((region, scratch)) = &mut m.bodies {
-        region.copy_to(&mut scratch[..]);
-    }
-    let seq1 = js_sys::Atomics::load(&m.header, 0).unwrap_or(-1);
-    if seq0 != seq1 {
-        return; // torn — writer was mid-publish
-    }
-    m.last_seq = seq0;
-    if let Err(err) =
-        awsm_renderer_scene_loader::mujoco::apply_geom_poses(r, &m.instance, &m.scratch)
+
+    if let Err(err) = awsm_renderer_scene_loader::mujoco::apply_geom_poses(r, &m.instance, &m.geoms)
     {
         tracing::warn!("pose sink: {err}");
     }
@@ -445,12 +579,72 @@ fn apply_poses(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
     // baked joint transforms, and writing the scene ones moves transforms
     // nothing is skinned to (every frame applies, nothing errors, the cloth
     // never leaves its bind pose).
-    if let Some((_, scratch)) = &m.bodies {
+    if m.drive_bodies {
         if let Err(err) =
-            awsm_renderer_scene_loader::mujoco::apply_body_poses(r, &m.instance, scratch)
+            awsm_renderer_scene_loader::mujoco::apply_body_poses(r, &m.instance, &m.bodies_blend)
         {
             tracing::warn!("body pose sink: {err}");
         }
+    }
+    apply_overlays(r, m);
+    late
+}
+
+/// Blend two runs of `[px,py,pz, qw,qx,qy,qz]` poses: positions linearly,
+/// rotations by normalized lerp along the shorter arc. Between two fixed steps
+/// a few milliseconds apart this is indistinguishable from slerp.
+fn blend_poses(a: &[f32], b: &[f32], alpha: f32, out: &mut [f32]) {
+    for ((a, b), o) in a
+        .as_chunks::<POSE_STRIDE>()
+        .0
+        .iter()
+        .zip(b.as_chunks::<POSE_STRIDE>().0)
+        .zip(out.as_chunks_mut::<POSE_STRIDE>().0)
+    {
+        for i in 0..3 {
+            o[i] = a[i] + (b[i] - a[i]) * alpha;
+        }
+        let dot = a[3] * b[3] + a[4] * b[4] + a[5] * b[5] + a[6] * b[6];
+        let sign = if dot < 0.0 { -1.0 } else { 1.0 };
+        let mut len = 0.0;
+        for i in 3..7 {
+            o[i] = a[i] + (b[i] * sign - a[i]) * alpha;
+            len += o[i] * o[i];
+        }
+        let len = len.sqrt();
+        if len > 1e-12 {
+            for v in &mut o[3..7] {
+                *v /= len;
+            }
+        }
+    }
+}
+
+/// The debug overlays, from the newest state (not interpolated). A torn read —
+/// the sim was mid-publish — skips them for this frame.
+fn apply_overlays(r: &mut awsm_renderer::AwsmRenderer, m: &mut SimLink) {
+    if m.contacts.is_none() && m.joints.is_none() && m.inertia.is_none() {
+        return;
+    }
+    let seq0 = js_sys::Atomics::load(&m.words, header::OVERLAY_SEQ).unwrap_or(1);
+    if seq0 % 2 != 0 {
+        return;
+    }
+    let ncon = js_sys::Atomics::load(&m.words, header::NCON)
+        .unwrap_or(0)
+        .max(0) as usize;
+    if let Some(overlay) = &mut m.contacts {
+        overlay.region.copy_to(&mut overlay.scratch[..]);
+    }
+    if let Some(overlay) = &mut m.joints {
+        overlay.region.copy_to(&mut overlay.scratch[..]);
+    }
+    if let Some(overlay) = &mut m.inertia {
+        overlay.region.copy_to(&mut overlay.scratch[..]);
+    }
+    let seq1 = js_sys::Atomics::load(&m.words, header::OVERLAY_SEQ).unwrap_or(-1);
+    if seq0 != seq1 {
+        return;
     }
     if let Some(overlay) = &mut m.contacts {
         overlay.apply(r, ncon);
@@ -625,7 +819,7 @@ struct OverlayToggles {
 }
 
 /// Install this worker's post-load `onmessage`: the forwarded MuJoCo model
-/// description (`kind: "mujoco-model"`), canvas resizes, and camera gestures.
+/// description (`kind: "mujoco-model"`), canvas resizes, and the camera state.
 fn install_onmessage(
     // The pose path never touches the renderer here — that is the point of the
     // migration — but the DEBUG overlay has to mint its own nodes, so the
@@ -686,10 +880,10 @@ fn install_onmessage(
             }
             return;
         }
-        match serde_wasm_bindgen::from_value::<CameraMsg>(data) {
-            Ok(CameraMsg::Orbit { dx, dy }) => camera.borrow_mut().orbit(dx, dy),
-            Ok(CameraMsg::Zoom { dy }) => camera.borrow_mut().zoom(dy),
-            Err(_) => {}
+        if let Ok(CameraMsg::State { t_ms, state }) =
+            serde_wasm_bindgen::from_value::<CameraMsg>(data)
+        {
+            camera.borrow_mut().post(t_ms, state);
         }
     });
     scope.set_onmessage(Some(cb.as_ref().unchecked_ref()));
@@ -725,18 +919,17 @@ fn link_sim(
     // only has the compiled model in memory; the geom count plus the scene's
     // own recorded hash is what is available on this side of the SAB.
     let sab = get("sab")?;
-    let header = js_sys::Int32Array::new(&sab);
-    let poses = js_sys::Float32Array::new(&sab).subarray(
-        POSE_HEADER as u32,
-        (POSE_HEADER + ngeom * POSE_STRIDE) as u32,
-    );
+    let njnt = get("njnt")?.as_f64().unwrap_or(0.0) as usize;
+    let nbody = get("nbody")?.as_f64().unwrap_or(0.0) as usize;
+    let layout = Layout { ngeom, njnt, nbody };
+    let timestep = get("timestep")?.as_f64().unwrap_or(0.005);
     tracing::info!(
         "contact overlay: requested={} root_transform={:?}",
         overlays.contacts,
         instance.root_transform.is_some()
     );
     let contacts = match (overlays.contacts, instance.root_transform) {
-        (true, Some(root)) => match build_contact_overlay(r, &sab, ngeom, root) {
+        (true, Some(root)) => match build_contact_overlay(r, &sab, &layout, root) {
             Ok(o) => Some(o),
             Err(err) => {
                 // A debug overlay is never worth failing the run for.
@@ -754,7 +947,7 @@ fn link_sim(
         true => match instance
             .root_transform
             .ok_or_else(|| JsValue::from_str("the sim instance has no resolved root transform"))
-            .and_then(|root| build_joint_overlay(r, data, &sab, ngeom, root))
+            .and_then(|root| build_joint_overlay(r, data, &sab, &layout, root))
         {
             Ok(o) => Some(o),
             Err(err) => {
@@ -764,14 +957,11 @@ fn link_sim(
         },
         false => None,
     };
-    // The inertia region sits after the joint region, so its offset needs the
-    // joint count even when the joint overlay itself was not built.
-    let njnt = get("njnt")?.as_f64().unwrap_or(0.0) as usize;
     let inertia = match overlays.inertia {
         true => match instance
             .root_transform
             .ok_or_else(|| JsValue::from_str("the sim instance has no resolved root transform"))
-            .and_then(|root| build_inertia_overlay(r, data, &sab, ngeom, njnt, root))
+            .and_then(|root| build_inertia_overlay(r, data, &sab, &layout, root))
         {
             Ok(o) => Some(o),
             Err(err) => {
@@ -781,14 +971,11 @@ fn link_sim(
         },
         false => None,
     };
-    // The body channel. Built only when the scene actually binds nodes to
+    // The body channel. Driven only when the scene actually binds nodes to
     // bodies — i.e. when the model has a deformable — since a model without one
-    // would pay a copy per frame for a sink call that moves nothing.
-    let nbody = get("nbody")?.as_f64().unwrap_or(0.0) as usize;
-    let binds_bodies = instance.bodies.iter().any(|b| !b.is_empty());
-    let bodies = if !binds_bodies {
-        None
-    } else if instance.bodies.len() != nbody {
+    // would pay a sink call per frame that moves nothing.
+    let drive_bodies = instance.bodies.iter().any(|b| !b.is_empty());
+    if drive_bodies && instance.bodies.len() != nbody {
         // Same reasoning as the geom guard above: a length mismatch here would
         // deform the flex with some other body's frame, which looks like a
         // plausible wrong shape rather than an error.
@@ -798,14 +985,7 @@ fn link_sim(
             instance.source.filename,
             instance.bodies.len(),
         )));
-    } else {
-        let offset = body_offset(ngeom, njnt, nbody);
-        Some((
-            js_sys::Float32Array::new(&sab)
-                .subarray(offset as u32, (offset + nbody * POSE_STRIDE) as u32),
-            vec![0.0; nbody * POSE_STRIDE],
-        ))
-    };
+    }
 
     tracing::info!(
         "body channel: bound={} of {} instance bodies, sim nbody={}",
@@ -814,16 +994,23 @@ fn link_sim(
         nbody,
     );
 
+    let words = js_sys::Int32Array::new(&sab);
+    let floats = js_sys::Float32Array::new(&sab);
     Ok(SimLink {
         instance,
-        header,
-        poses,
-        scratch: vec![0.0; ngeom * POSE_STRIDE],
-        last_seq: 0,
+        layout,
+        dt_us: timestep * 1_000_000.0,
+        words,
+        floats,
+        older: vec![0.0; layout.slot_words()],
+        newer: vec![0.0; layout.slot_words()],
+        geoms: vec![0.0; ngeom * POSE_STRIDE],
+        bodies_blend: vec![0.0; nbody * POSE_STRIDE],
+        last_frame_us: None,
+        drive_bodies,
         contacts,
         joints,
         inertia,
-        bodies,
     })
 }
 
@@ -832,12 +1019,11 @@ fn build_inertia_overlay(
     r: &mut awsm_renderer::AwsmRenderer,
     data: &JsValue,
     sab: &JsValue,
-    ngeom: usize,
-    njnt: usize,
+    layout: &Layout,
     root: awsm_renderer::transforms::TransformKey,
 ) -> Result<InertiaOverlay, JsValue> {
     let get = |key: &str| js_sys::Reflect::get(data, &JsValue::from_str(key));
-    let nbody = get("nbody")?.as_f64().unwrap_or(0.0) as usize;
+    let nbody = layout.nbody;
     let f64s = |key: &str| -> Vec<f64> {
         get(key)
             .ok()
@@ -888,7 +1074,7 @@ fn build_inertia_overlay(
         boxes.push(Some((tk, half)));
     }
 
-    let start = inertia_offset(ngeom, njnt);
+    let start = layout.inertia();
     let region =
         js_sys::Float32Array::new(sab).subarray(start as u32, (start + nbody * POSE_STRIDE) as u32);
     Ok(InertiaOverlay {
@@ -903,11 +1089,11 @@ fn build_joint_overlay(
     r: &mut awsm_renderer::AwsmRenderer,
     data: &JsValue,
     sab: &JsValue,
-    ngeom: usize,
+    layout: &Layout,
     root: awsm_renderer::transforms::TransformKey,
 ) -> Result<JointOverlay, JsValue> {
     let get = |key: &str| js_sys::Reflect::get(data, &JsValue::from_str(key));
-    let njnt = get("njnt")?.as_f64().unwrap_or(0.0) as usize;
+    let njnt = layout.njnt;
     let jnt_type: Vec<i32> = get("jnt_type")
         .ok()
         .map(|v| v.unchecked_into::<js_sys::Int32Array>().to_vec())
@@ -949,7 +1135,7 @@ fn build_joint_overlay(
         bars.push(Some(tk));
     }
 
-    let start = joint_offset(ngeom);
+    let start = layout.joints();
     let region =
         js_sys::Float32Array::new(sab).subarray(start as u32, (start + njnt * JOINT_STRIDE) as u32);
     Ok(JointOverlay {
@@ -968,7 +1154,7 @@ const JOINT_AXIS_LEN: f32 = 0.16;
 fn build_contact_overlay(
     r: &mut awsm_renderer::AwsmRenderer,
     sab: &JsValue,
-    ngeom: usize,
+    layout: &Layout,
     root: awsm_renderer::transforms::TransformKey,
 ) -> Result<ContactOverlay, JsValue> {
     let mut pbr = awsm_renderer::materials::pbr::PbrMaterial::new(
@@ -1007,7 +1193,7 @@ fn build_contact_overlay(
         spikes.push((tk, mk));
     }
 
-    let start = contact_offset(ngeom);
+    let start = layout.contacts();
     let region = js_sys::Float32Array::new(sab)
         .subarray(start as u32, (start + MAX_CONTACTS * CONTACT_STRIDE) as u32);
     Ok(ContactOverlay {
@@ -1045,5 +1231,25 @@ fn post_to_main(msg: &RenderMsg) {
             let _ = scope.post_message(&v);
         }
         Err(e) => tracing::error!("render thread: serialize RenderMsg: {e}"),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn blend_lerps_positions_and_nlerps_the_short_way() {
+        // Identity, then 90° about z; the second one written with the sign
+        // flipped (the same rotation) to exercise the hemisphere check.
+        let h = std::f32::consts::FRAC_1_SQRT_2;
+        let a = [0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0];
+        let b = [2.0, 4.0, 6.0, -h, 0.0, 0.0, -h];
+        let mut out = [0.0; 7];
+        blend_poses(&a, &b, 0.5, &mut out);
+        assert_eq!(&out[..3], &[1.0, 2.0, 3.0]);
+        let q = Quat::from_xyzw(out[4], out[5], out[6], out[3]);
+        let expected = Quat::from_rotation_z(std::f32::consts::FRAC_PI_4);
+        assert!(q.angle_between(expected) < 1e-4);
     }
 }

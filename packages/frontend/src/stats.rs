@@ -8,8 +8,15 @@
 //!   display       120 Hz          the display's refresh rate (measured)
 //!   fps           118             frames the render worker presented per second
 //!   missed        2/s · 37 total  refreshes that showed no new frame
+//!   sim late      0/s · 0 total   frames that found no sim state to show
 //!   cpu time      1.3 ms          the render worker's CPU time per frame
 //! ```
+//!
+//! **Sim late.** Each frame draws the sim one frame behind, between the two
+//! published states around its display time (see `protocol`, "Timing"). A
+//! frame that finds the sim has not yet published a state past that time holds
+//! the newest one instead: the picture pauses for a frame. A steady count here
+//! means MuJoCo is not keeping up with real time.
 //!
 //! **Display rate.** No browser API reports the refresh rate, so the main
 //! thread runs its own (otherwise empty) `requestAnimationFrame` loop and
@@ -52,6 +59,7 @@ pub struct FrameWindow {
     frames: u32,
     span_ms: f64,
     cpu_ms: f64,
+    late: u32,
 }
 
 impl FrameWindow {
@@ -60,8 +68,9 @@ impl FrameWindow {
     }
 
     /// One presented frame: `t` is its rAF timestamp, `cpu_ms` the CPU time
-    /// the frame took. Returns a [`RenderMsg::Stats`] when a window is full.
-    pub fn frame(&mut self, t: f64, cpu_ms: f64) -> Option<RenderMsg> {
+    /// the frame took, `late` whether it had to hold the sim's newest state.
+    /// Returns a [`RenderMsg::Stats`] when a window is full.
+    pub fn frame(&mut self, t: f64, cpu_ms: f64, late: bool) -> Option<RenderMsg> {
         let prev = self.prev_t.replace(t)?; // the first frame only starts the clock
         let dt = t - prev;
         if !(dt > 0.0 && dt <= GAP_MS) {
@@ -70,6 +79,7 @@ impl FrameWindow {
         self.frames += 1;
         self.span_ms += dt;
         self.cpu_ms += cpu_ms;
+        self.late += u32::from(late);
         if self.span_ms < REPORT_SPAN_MS {
             return None;
         }
@@ -77,12 +87,25 @@ impl FrameWindow {
             frames: self.frames,
             span_ms: self.span_ms,
             cpu_ms: self.cpu_ms,
+            late: self.late,
         };
         self.frames = 0;
         self.span_ms = 0.0;
         self.cpu_ms = 0.0;
+        self.late = 0;
         Some(msg)
     }
+}
+
+/// `performance.timeOrigin` in the render worker: added to a frame timestamp,
+/// it gives the absolute time every thread of the page agrees on.
+pub fn worker_time_origin() -> f64 {
+    js_sys::global()
+        .dyn_into::<web_sys::WorkerGlobalScope>()
+        .ok()
+        .and_then(|g| g.performance())
+        .map(|p| p.time_origin())
+        .unwrap_or(0.0)
 }
 
 /// `performance.now()` in the render worker.
@@ -125,6 +148,7 @@ struct State {
     fps_ema: Option<f64>,
     cpu_ema: Option<f64>,
     missed_rate: Option<f64>,
+    late_total: u64,
     /// Signed running sum of (refreshes - frames): a window whose ends fall
     /// unevenly can read ±1, and the next one cancels it.
     missed_sum: f64,
@@ -179,7 +203,7 @@ impl Stats {
     }
 
     /// One [`RenderMsg::Stats`] window from the render worker.
-    pub fn window(&self, frames: u32, span_ms: f64, cpu_ms: f64) {
+    pub fn window(&self, frames: u32, span_ms: f64, cpu_ms: f64, late: u32) {
         let mut st = self.state.borrow_mut();
         if !st.ready || frames == 0 || span_ms <= 0.0 {
             return;
@@ -210,9 +234,15 @@ impl Stats {
             ),
             None => "—".to_string(),
         };
+        st.late_total += u64::from(late);
+        let sim_late = format!(
+            "{:.0}/s · {} total",
+            late as f64 * 1000.0 / span_ms,
+            st.late_total
+        );
         let ms = |v: Option<f64>| v.map_or("—".to_string(), |v| format!("{v:.1} ms"));
         self.text.set(format!(
-            "render\n  display       {display}\n  fps           {:.0}\n  missed        {missed}\n  cpu time      {}",
+            "render\n  display       {display}\n  fps           {:.0}\n  missed        {missed}\n  sim late      {sim_late}\n  cpu time      {}",
             st.fps_ema.unwrap_or(0.0),
             ms(st.cpu_ema),
         ));
@@ -306,14 +336,14 @@ mod tests {
     fn frame_window_reports_and_skips_pauses() {
         let mut w = FrameWindow::new();
         let mut t = 0.0;
-        assert!(w.frame(t, 1.0).is_none());
+        assert!(w.frame(t, 1.0, false).is_none());
         // A pause is neither a frame nor span.
         t += 5000.0;
-        assert!(w.frame(t, 1.0).is_none());
+        assert!(w.frame(t, 1.0, false).is_none());
         let mut out = None;
         for _ in 0..50 {
             t += 20.0;
-            if let Some(m) = w.frame(t, 1.0) {
+            if let Some(m) = w.frame(t, 1.0, false) {
                 out = Some(m);
             }
         }

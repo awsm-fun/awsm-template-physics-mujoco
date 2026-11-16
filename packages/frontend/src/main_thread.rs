@@ -16,7 +16,10 @@
 //!    it begins stepping + publishing) and forwards the model description +
 //!    block to the render worker (`"mujoco-model"` — it builds the mirror).
 //! 5. After that main is out of the loop: poses flow sim → render through
-//!    shared memory only. Main just relays resize + camera gestures.
+//!    shared memory only, paced by the render worker's frame tick (see
+//!    `protocol`, "Timing"). Main relays resizes, and owns the orbit camera:
+//!    pointer events update it, and once per main-thread frame in which it
+//!    changed, its state goes to the render worker (see [`CameraMsg`]).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
@@ -29,7 +32,7 @@ use web_sys::js_sys;
 use web_sys::{HtmlCanvasElement, MessageEvent, Worker, WorkerOptions, WorkerType};
 
 use crate::bootstrap::spawn_shared_worker_transfer;
-use crate::protocol::{pose_block_bytes, CameraMsg, RenderMsg, Scene};
+use crate::protocol::{CameraMsg, Layout, OrbitState, RenderMsg, Scene};
 
 /// Build + mount the DOM, then start the worker pipeline.
 pub fn start() -> Result<(), JsValue> {
@@ -131,8 +134,8 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
                     stats.mark_ready();
                     status.set("running — drag orbits, wheel zooms".into());
                 }
-                Ok(RenderMsg::Stats { frames, span_ms, cpu_ms }) => {
-                    stats.window(frames, span_ms, cpu_ms);
+                Ok(RenderMsg::Stats { frames, span_ms, cpu_ms, late }) => {
+                    stats.window(frames, span_ms, cpu_ms, late);
                 }
                 Ok(RenderMsg::Error { message }) => {
                     loading_log(&format!("ERROR: {message}"));
@@ -222,7 +225,7 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
 
     // Layout changes → ResizeMsg, plus the Settings modal (resolution slider).
     resolution.install(&window, &canvas, render.clone())?;
-    install_pointer(&canvas, render)?;
+    install_pointer(&window, &canvas, render)?;
 
     status.set("loading scene…".into());
     Ok(())
@@ -255,7 +258,7 @@ fn maybe_start(
         .ok()
         .and_then(|v| v.as_f64())
         .unwrap_or(0.0) as usize;
-    let sab = js_sys::SharedArrayBuffer::new(pose_block_bytes(ngeom, njnt, nbody) as u32);
+    let sab = js_sys::SharedArrayBuffer::new(Layout { ngeom, njnt, nbody }.bytes() as u32);
 
     if let Some(mujoco) = mujoco_ref.borrow().as_ref() {
         let start = js_sys::Object::new();
@@ -280,9 +283,17 @@ fn maybe_start(
     loading_log("pose block allocated — sim + mirror starting");
 }
 
-/// Pointer-drag orbits, wheel zooms — deltas forwarded to the render thread's
-/// camera.
-fn install_pointer(canvas: &HtmlCanvasElement, render: Worker) -> Result<(), JsValue> {
+/// Pointer-drag orbits, wheel zooms. Main owns the camera state: the events
+/// update it as they arrive, and a main-thread animation-frame loop posts it to
+/// the render worker, stamped with that frame's absolute time, whenever it
+/// changed. The render worker picks which posted state to draw (see
+/// [`CameraMsg`]).
+fn install_pointer(
+    window: &web_sys::Window,
+    canvas: &HtmlCanvasElement,
+    render: Worker,
+) -> Result<(), JsValue> {
+    let camera = Rc::new(Cell::new(OrbitState::START));
     let dragging = Rc::new(Cell::new(false));
     let last: Rc<Cell<(f32, f32)>> = Rc::new(Cell::new((0.0, 0.0)));
 
@@ -304,33 +315,60 @@ fn install_pointer(canvas: &HtmlCanvasElement, render: Worker) -> Result<(), JsV
     canvas.add_event_listener_with_callback("pointercancel", up.as_ref().unchecked_ref())?;
     up.forget();
 
-    let render_move = render.clone();
     let mv = Closure::<dyn FnMut(web_sys::PointerEvent)>::new(
-        clone!(dragging, last => move |e: web_sys::PointerEvent| {
+        clone!(dragging, last, camera => move |e: web_sys::PointerEvent| {
             if !dragging.get() {
                 return;
             }
             let (lx, ly) = last.get();
             let (x, y) = (e.client_x() as f32, e.client_y() as f32);
             last.set((x, y));
-            if let Ok(v) = serde_wasm_bindgen::to_value(&CameraMsg::Orbit { dx: x - lx, dy: y - ly }) {
-                let _ = render_move.post_message(&v);
-            }
+            let mut c = camera.get();
+            c.orbit(x - lx, y - ly);
+            camera.set(c);
         }),
     );
     canvas.add_event_listener_with_callback("pointermove", mv.as_ref().unchecked_ref())?;
     mv.forget();
 
-    let wheel = Closure::<dyn FnMut(web_sys::WheelEvent)>::new(move |e: web_sys::WheelEvent| {
-        e.prevent_default();
-        if let Ok(v) = serde_wasm_bindgen::to_value(&CameraMsg::Zoom {
-            dy: e.delta_y() as f32,
-        }) {
-            let _ = render.post_message(&v);
-        }
-    });
+    let wheel = Closure::<dyn FnMut(web_sys::WheelEvent)>::new(
+        clone!(camera => move |e: web_sys::WheelEvent| {
+            e.prevent_default();
+            let mut c = camera.get();
+            c.zoom(e.delta_y() as f32);
+            camera.set(c);
+        }),
+    );
     canvas.add_event_listener_with_callback("wheel", wheel.as_ref().unchecked_ref())?;
     wheel.forget();
+
+    // Once per main-thread frame (after that frame's input events), post the
+    // state if it changed.
+    type Cb = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
+    let time_origin = window.performance().map(|p| p.time_origin()).unwrap_or(0.0);
+    let cb: Cb = Rc::new(RefCell::new(None));
+    let again = cb.clone();
+    let mut sent: Option<OrbitState> = None;
+    *cb.borrow_mut() = Some(Closure::new(move |t: f64| {
+        let state = camera.get();
+        if sent != Some(state) {
+            sent = Some(state);
+            let msg = CameraMsg::State {
+                t_ms: time_origin + t,
+                state,
+            };
+            if let Ok(v) = serde_wasm_bindgen::to_value(&msg) {
+                let _ = render.post_message(&v);
+            }
+        }
+        if let (Some(w), Some(f)) = (web_sys::window(), again.borrow().as_ref()) {
+            let _ = w.request_animation_frame(f.as_ref().unchecked_ref());
+        }
+    }));
+    if let Some(f) = cb.borrow().as_ref() {
+        window.request_animation_frame(f.as_ref().unchecked_ref())?;
+    }
+    std::mem::forget(cb);
     Ok(())
 }
 

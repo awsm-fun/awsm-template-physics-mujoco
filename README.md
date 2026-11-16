@@ -54,10 +54,10 @@ flowchart LR
     end
 
     subgraph MJ["MuJoCo worker · plain JS module worker"]
-        SIM["Official MuJoCo Emscripten module<br/>its own wasm instance + heap<br/>steps in real time"]
+        SIM["Official MuJoCo Emscripten module<br/>its own wasm instance + heap<br/>fixed steps, paced by the render tick"]
     end
 
-    SAB[("Pose block · SharedArrayBuffer<br/>seqlock header · geom poses · body poses<br/>contact / joint / inertia debug frames")]
+    SAB[("Pose block · SharedArrayBuffer<br/>frame tick + time · 8 timestamped pose slots<br/>contact / joint / inertia debug frames")]
     BASIS["Basis worker · plain JS<br/>KTX2 texture transcode at load<br/>its own memory"]
 
     MAIN -- "spawns, transfers the OffscreenCanvas" --> RENDER
@@ -65,21 +65,23 @@ flowchart LR
     SIM -. "progress, model description (once)" .-> MAIN
     RENDER -. "RenderMsg: Progress, SceneReady, Ready, Error" .-> MAIN
     MAIN -. "start + pose block" .-> SIM
-    MAIN -. "mujoco-model + pose block, then ResizeMsg / CameraMsg" .-> RENDER
-    SIM == "writes after each step batch" ==> SAB
-    SAB == "snapshot copied once per frame" ==> RENDER
+    MAIN -. "mujoco-model + pose block, then ResizeMsg / CameraMsg (once per main frame)" .-> RENDER
+    RENDER == "frame time + tick, at the start of every frame" ==> SAB
+    SAB == "tick wakes the sim" ==> SIM
+    SIM == "one stamped pose slot per wake" ==> SAB
+    SAB == "two slots around the display time, blended" ==> RENDER
     RENDER -. "spawned on demand, buffers transferred" .-> BASIS
 ```
 
 | What | Lives in | Written by | Read by | Synchronization |
 |---|---|---|---|---|
-| Pose block | a standalone `SharedArrayBuffer`, allocated by main once the model's sizes are known | MuJoCo worker (single writer) | render worker (single reader) | seqlock: writer makes `seq` odd, writes, makes it even; reader retries a torn copy |
+| Pose block | a standalone `SharedArrayBuffer`, allocated by main once the model's sizes are known | render worker: frame time + tick; MuJoCo worker: pose slots + debug frames | each the other's | the tick is `Atomics.notify`'d and awaited with `Atomics.waitAsync`; each pose slot has its own seq (odd while written), and the reader re-checks it after copying and falls back to an older pair, never waiting |
 | Rust heap | the shared `WebAssembly.Memory` main + render attach to | each thread, its own data | each thread, its own data | no app state crosses through it — it is what lets one wasm module run on both threads |
 | MuJoCo model + sim state | the MuJoCo module's private heap | MuJoCo worker | MuJoCo worker | not shared; f64 state is narrowed to f32 at the publish boundary |
 
 After the startup handshake main is out of the loop: poses go MuJoCo worker
 → pose block → render worker with no messages. More in
-[The threads](#the-threads) below.
+[The threads](#the-threads) and [Timing](#timing) below.
 
 ## Run it
 
@@ -114,7 +116,7 @@ geom count disagrees with the sim, so one name picks both (`Scene` in
 
 The flag is the one that proves the deformable path end to end. A flex's 171
 cloth vertices each ride their own body, and the sim publishes those body
-frames into the same seqlock as the geom poses; the renderer skins to them.
+frames into the same pose slot as the geom poses; the renderer skins to them.
 **No vertex data crosses the wire** — 171 body frames per step is the entire
 cost of a waving cloth.
 
@@ -135,7 +137,9 @@ humanoid collapses into a heap, the flag flaps forever.
 The **Stats** button (bottom left) opens a small panel (top right): the
 display's refresh rate (measured on the main thread, since no browser API
 reports it), frames per second, **missed frames** (refreshes that showed no new
-frame, per second and in total), and the render worker's CPU time per frame.
+frame, per second and in total), **sim late** (frames that found MuJoCo had not
+yet finished the state they were due to show, and held the newest one; see
+[Timing](#timing)), and the render worker's CPU time per frame.
 It is off by default and remembers its state; **Settings** (bottom right) holds
 the render resolution. The panel is `packages/frontend/src/stats.rs`.
 
@@ -154,18 +158,51 @@ its own heap.
 
 | Thread | File | Does |
 |---|---|---|
-| **Main** | `packages/frontend/src/main_thread.rs` | Owns the DOM (Dominator), spawns both workers, brokers the one-time startup handshake, forwards camera input. The Stats panel is `packages/frontend/src/stats.rs`. |
-| **Render** | `packages/frontend/src/render_thread.rs` | Hosts `awsm-renderer` on an `OffscreenCanvas`, loads the editor-exported player bundle, applies the sim's poses every frame, draws the debug overlays. |
-| **MuJoCo worker** | `web/workers/mujoco-worker.js` | Hosts the official `@mujoco/mujoco` Emscripten module, steps the sim in real time, publishes geom + body world poses (and contact/joint/inertia debug frames) into a `SharedArrayBuffer` pose block. |
+| **Main** | `packages/frontend/src/main_thread.rs` | Owns the DOM (Dominator), spawns both workers, brokers the one-time startup handshake, owns the orbit camera's state and posts it once per frame. The Stats panel is `packages/frontend/src/stats.rs`. |
+| **Render** | `packages/frontend/src/render_thread.rs` | Hosts `awsm-renderer` on an `OffscreenCanvas`, loads the editor-exported player bundle, ticks the sim at the start of every frame, draws the sim's poses blended at the display time, draws the debug overlays. |
+| **MuJoCo worker** | `web/workers/mujoco-worker.js` | Hosts the official `@mujoco/mujoco` Emscripten module, steps the sim at its fixed timestep as the render tick pays for (or on its own clock when no renderer is ticking), publishes timestamped geom + body world poses (and contact/joint/inertia debug frames) into a `SharedArrayBuffer` pose block. |
 
 Main + render share one `WebAssembly.Memory` — the threaded build profile
 (nightly, `+atomics,+bulk-memory`, `-Z build-std`) plus COOP/COEP headers on
 serve (`Trunk.toml`) make that possible; see the notes in `Taskfile.yml`. The
-MuJoCo module talks only through the pose block: a **seqlock**
-(`protocol.rs`) whose writer makes the sequence odd, writes poses, makes it
-even — the reader retries on a torn frame instead of blocking. MuJoCo computes
-in f64; the worker narrows to f32 at the publish boundary, so the renderer
-never meets a double.
+MuJoCo module talks only through the pose block (`protocol.rs`). MuJoCo
+computes in f64; the worker narrows to f32 at the publish boundary, so the
+renderer never meets a double.
+
+## Timing
+
+The sim plays every step at MuJoCo's fixed timestep, as many per wake as real
+time has paid for; the display only ever shows the latest state or a blend of
+the latest two (Glenn Fiedler's "Fix Your Timestep"). Sim and renderer run on
+different threads, so one clock ties them together: the render worker's frame
+times. All times are absolute (`performance.timeOrigin + now`), which every
+worker of the page agrees on.
+
+1. At the **start** of each frame the render worker writes its rAF time `T` to
+   the pose block and bumps a tick.
+2. The MuJoCo worker, waiting on that tick (`Atomics.waitAsync`), adds the
+   time since it last stepped to its accumulator, runs whole steps while the
+   accumulator holds one, and publishes one pose slot stamped
+   `T - accumulator`: the time its state is due.
+3. The next frame draws at `T - dt` for the previous frame's `T`, blending the
+   two slots on either side (positions lerped, rotations nlerped). That is
+   `lerp(latest-1, latest, accumulator / dt)`: uniform motion at any refresh
+   rate, one frame plus at most one step behind.
+
+If MuJoCo has not finished by the next frame, that frame holds the newest pose
+and the Stats panel counts it as **sim late**: the humanoid (5 ms steps, three
+or four per frame at 60 Hz) never is; the flag's cloth, at 2 ms steps (about
+eight per frame) of a costly flex, takes 11–13 ms of each 16.7 ms frame and is
+occasionally late. With no tick for 100 ms (no renderer yet, a hidden tab) the
+sim keeps going on its own clock, on the same timeline, so a robotics run never
+stalls.
+
+The camera follows the same "one frame of input per drawn frame" rule: main
+owns its state (pointer events update it), posts it once per main-thread frame
+in which it changed, stamped with that frame's time, and the render worker
+draws the newest state at least half a frame older than its own frame. Each
+frame therefore shows exactly one main frame's worth of dragging, however the
+two threads' callbacks interleave, with one frame of latency.
 
 ## How a scene binds to the sim
 
