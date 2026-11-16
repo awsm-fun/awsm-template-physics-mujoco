@@ -20,6 +20,49 @@ Two demo scenes ship: the DeepMind **humanoid ragdoll**, and a MuJoCo
 **cloth flag** — a deformable (*flex*) that imports as an ordinary skinned
 mesh and waves in the sim's wind with **no vertex data crossing the wire**.
 
+## Threading at a glance
+
+Three threads, **two separate wasm instances**, and exactly one piece of
+shared state on the hot path: the pose block. Solid arrows are spawns,
+dotted arrows are `postMessage` (startup and input only), thick arrows are
+shared-memory reads/writes.
+
+```mermaid
+flowchart LR
+    subgraph RUST["Rust wasm module · one shared WebAssembly.Memory"]
+        direction TB
+        MAIN["Main thread<br/>DOM · HUD · pointer input<br/>allocates the pose block"]
+        RENDER["Render worker<br/>awsm-renderer on an OffscreenCanvas<br/>applies poses every frame"]
+    end
+
+    subgraph MJ["MuJoCo worker · plain JS module worker"]
+        SIM["Official MuJoCo Emscripten module<br/>its own wasm instance + heap<br/>steps in real time"]
+    end
+
+    SAB[("Pose block · SharedArrayBuffer<br/>seqlock header · geom poses · body poses<br/>contact / joint / inertia debug frames")]
+    BASIS["Basis worker · plain JS<br/>KTX2 texture transcode at load<br/>its own memory"]
+
+    MAIN -- "spawns, transfers the OffscreenCanvas" --> RENDER
+    MAIN -- "spawns, init: module URLs + model XML" --> SIM
+    SIM -. "progress, model description (once)" .-> MAIN
+    RENDER -. "RenderMsg: Progress, SceneReady, Ready, Error" .-> MAIN
+    MAIN -. "start + pose block" .-> SIM
+    MAIN -. "mujoco-model + pose block, then ResizeMsg / CameraMsg" .-> RENDER
+    SIM == "writes after each step batch" ==> SAB
+    SAB == "snapshot copied once per frame" ==> RENDER
+    RENDER -. "spawned on demand, buffers transferred" .-> BASIS
+```
+
+| What | Lives in | Written by | Read by | Synchronization |
+|---|---|---|---|---|
+| Pose block | a standalone `SharedArrayBuffer`, allocated by main once the model's sizes are known | MuJoCo worker (single writer) | render worker (single reader) | seqlock: writer makes `seq` odd, writes, makes it even; reader retries a torn copy |
+| Rust heap | the shared `WebAssembly.Memory` main + render attach to | each thread, its own data | each thread, its own data | no app state crosses through it — it is what lets one wasm module run on both threads |
+| MuJoCo model + sim state | the MuJoCo module's private heap | MuJoCo worker | MuJoCo worker | not shared; f64 state is narrowed to f32 at the publish boundary |
+
+After the startup handshake main is out of the loop: poses go MuJoCo worker
+→ pose block → render worker with no messages. More in
+[The threads](#the-threads) below.
+
 ## Run it
 
 ```sh
