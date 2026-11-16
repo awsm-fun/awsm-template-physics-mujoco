@@ -291,7 +291,7 @@ fn refresh_period(samples: &VecDeque<f64>) -> Option<f64> {
         .iter()
         .filter(|d| (**d - median).abs() <= median * REFRESH_INLIER)
         .fold((0.0, 0u32), |(s, n), d| (s + d, n + 1));
-    (n > 0).then(|| sum / n as f64)
+    (n > 0).then_some(sum / f64::from(n))
 }
 
 /// A touch / `pointer: coarse` device (phones, tablets).
