@@ -22,6 +22,24 @@ mesh and waves in the sim's wind with **no vertex data crossing the wire**.
 
 ## Threading at a glance
 
+### What runs where
+
+```mermaid
+flowchart TB
+    MAIN["<b>Main thread</b><br/>UI and DOM<br/>pointer input<br/>startup handshake"]
+    RENDER["<b>Render worker</b><br/>awsm-renderer (WebGPU)<br/>scene loading<br/>camera<br/>applying sim poses, debug overlays"]
+    SIM["<b>MuJoCo worker</b><br/>MuJoCo simulation, stepping in real time"]
+    BASIS["<b>Basis worker</b><br/>texture decoding at load"]
+
+    MAIN --> RENDER
+    MAIN --> SIM
+    RENDER --> BASIS
+```
+
+Arrows point from a thread to the threads that work on its behalf.
+
+### In detail
+
 Three threads, **two separate wasm instances**, and exactly one piece of
 shared state on the hot path: the pose block. Solid arrows are spawns,
 dotted arrows are `postMessage` (startup and input only), thick arrows are
