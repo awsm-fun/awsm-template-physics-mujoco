@@ -132,6 +132,13 @@ format never learn what a contact is.
 **Controls:** drag orbits the camera, wheel zooms. The sim runs itself — the
 humanoid collapses into a heap, the flag flaps forever.
 
+The **Stats** button (bottom left) opens a small panel (top right): the
+display's refresh rate (measured on the main thread, since no browser API
+reports it), frames per second, **missed frames** (refreshes that showed no new
+frame, per second and in total), and the render worker's CPU time per frame.
+It is off by default and remembers its state; **Settings** (bottom right) holds
+the render resolution. The panel is `packages/frontend/src/stats.rs`.
+
 Other tasks: `task build` (production build into `dist/`), `task check`
 (threaded `cargo check`, no serve), `task lint` (clippy), `task fmt` (format),
 `task clean`. CI (`.github/workflows/ci.yml`) runs `cargo fmt --check` and
@@ -147,7 +154,7 @@ its own heap.
 
 | Thread | File | Does |
 |---|---|---|
-| **Main** | `packages/frontend/src/main_thread.rs` | Owns the DOM (Dominator), spawns both workers, brokers the one-time startup handshake, forwards camera input. |
+| **Main** | `packages/frontend/src/main_thread.rs` | Owns the DOM (Dominator), spawns both workers, brokers the one-time startup handshake, forwards camera input. The Stats panel is `packages/frontend/src/stats.rs`. |
 | **Render** | `packages/frontend/src/render_thread.rs` | Hosts `awsm-renderer` on an `OffscreenCanvas`, loads the editor-exported player bundle, applies the sim's poses every frame, draws the debug overlays. |
 | **MuJoCo worker** | `web/workers/mujoco-worker.js` | Hosts the official `@mujoco/mujoco` Emscripten module, steps the sim in real time, publishes geom + body world poses (and contact/joint/inertia debug frames) into a `SharedArrayBuffer` pose block. |
 

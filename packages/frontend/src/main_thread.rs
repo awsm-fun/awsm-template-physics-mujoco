@@ -60,6 +60,13 @@ pub fn start() -> Result<(), JsValue> {
 
 fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsValue> {
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
+    // Take keyboard focus (the Settings modal closes on Escape). The page is
+    // usually embedded in an iframe on awsm.fun; a click on the canvas focuses
+    // it too, since no pointer handler here cancels the press.
+    let _ = window.focus();
+
+    // The Stats chip + panel (see `crate::stats`), fed by the render worker.
+    let stats = crate::stats::Stats::install(&window, "awsm_mujoco_stats");
 
     // Backing store at the chosen render resolution (a stored Settings choice,
     // else native capped at a pixel budget — see `resolution`). Must be sized
@@ -110,7 +117,7 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     let mujoco_ref: Rc<RefCell<Option<Worker>>> = Rc::new(RefCell::new(None));
 
     let on_render_msg = Closure::<dyn FnMut(MessageEvent)>::new(clone!(
-        status, model_msg, scene_ready, render_ref, mujoco_ref => move |e: MessageEvent| {
+        status, model_msg, scene_ready, render_ref, mujoco_ref, stats => move |e: MessageEvent| {
             match serde_wasm_bindgen::from_value::<RenderMsg>(e.data()) {
                 Ok(RenderMsg::Progress { message }) => loading_log(&message),
                 Ok(RenderMsg::SceneReady) => {
@@ -121,7 +128,11 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
                 Ok(RenderMsg::Ready) => {
                     loading_log("first frames rendered — ready");
                     loading_done();
+                    stats.mark_ready();
                     status.set("running — drag orbits, wheel zooms".into());
+                }
+                Ok(RenderMsg::Stats { frames, span_ms, cpu_ms }) => {
+                    stats.window(frames, span_ms, cpu_ms);
                 }
                 Ok(RenderMsg::Error { message }) => {
                     loading_log(&format!("ERROR: {message}"));

@@ -351,8 +351,11 @@ async fn run(
     let raf_init = raf.clone();
     let raf_run = raf.clone();
     let mut frame_count: u32 = 0;
+    // Presented frames and their timing, for the page's Stats panel.
+    let mut frame_window = crate::stats::FrameWindow::new();
 
-    *raf_init.borrow_mut() = Some(Closure::new(move |_vsync_ms: f64| {
+    *raf_init.borrow_mut() = Some(Closure::new(move |vsync_ms: f64| {
+        let frame_start = crate::stats::worker_now();
         let mut r = cell.borrow_mut();
 
         // Apply the newest stable sim snapshot (if the mirror exists yet and
@@ -378,6 +381,10 @@ async fn run(
         frame_count = frame_count.wrapping_add(1);
         if frame_count == 3 {
             post_to_main(&RenderMsg::Ready);
+        }
+        let cpu_ms = crate::stats::worker_now() - frame_start;
+        if let Some(msg) = frame_window.frame(vsync_ms, cpu_ms) {
+            post_to_main(&msg);
         }
         if let Some(cb) = raf_run.borrow().as_ref() {
             let _ = awsm_renderer::web_global::request_animation_frame(cb.as_ref().unchecked_ref());

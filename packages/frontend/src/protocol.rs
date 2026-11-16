@@ -136,6 +136,15 @@ pub enum RenderMsg {
     SceneReady,
     /// First real frames have been presented.
     Ready,
+    /// About once a second: the frames presented since the last report, the
+    /// time they covered (rAF timestamp to rAF timestamp, pauses left out),
+    /// and the render worker's CPU time for them. The Stats panel turns these
+    /// into fps, missed frames and CPU time per frame (see `crate::stats`).
+    Stats {
+        frames: u32,
+        span_ms: f64,
+        cpu_ms: f64,
+    },
     Error {
         message: String,
     },
