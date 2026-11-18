@@ -140,21 +140,22 @@ and what it is per:
 
 | Group | Headline | Rows when expanded |
 |---|---|---|
+| `frame budget` | the refresh period and the headroom left by the largest lane (`16.7 ms (60 Hz) · headroom 9.5 ms`, or `over by …` in red) | one row per lane, `used / budget ms (n%)`: `GPU`, `renderer (render worker)`, `sim (MuJoCo, worker)` (its time per step × steps per frame), `page (main thread)`; then `latency (renderer + GPU), reference only` |
 | `display` | refresh rate · fps | refresh rate (measured on the main thread, since no browser API reports it), frames presented, **missed frames** (refreshes that showed no new frame) |
 | `GPU` | GPU time per frame (timestamp queries; `n/a` without them) | one row per pass, slowest first; on GPUs that overlap passes (Apple's) they add up to more than the frame |
-| `renderer (render worker)` | the render worker's CPU time per frame | its four phases (`read app state + interpolate`, `set camera`, `update transforms`, `render (encode + submit)`), with awsm-renderer's own CPU scopes under render, then `timing the passes` |
+| `renderer (render worker)` | the render worker's CPU time per frame | its four phases (`read app state + interpolate`, `set camera`, `update transforms`, `render (encode + submit)`); under render, awsm-renderer's own CPU scopes as `prepare` (uploads, bind groups, …), `passes` and `submit`, each scope slowest first (those under 1 µs folded into one row), then `outside the scopes` |
 | `sim (MuJoCo, worker)` | the MuJoCo worker's CPU time per step | steps/s, **late frames** (frames that found MuJoCo had not yet finished the state they were due to show, and held the newest one; see [Timing](#timing)), stepping (`mj_step`) vs publishing |
 | `page (main thread)` | the main thread's own work per frame | its two animation-frame loops: `camera frame loop`, `refresh probe` |
 
 Click a group to expand it; each remembers its state. Expanding a group is
-what turns on its extra timing (the renderer's per-pass CPU scopes, the phase
-clocks, the per-pass GPU numbers, the sim's split), so a collapsed group, or a
-hidden panel, costs nothing. The renderer's per-pass CPU timers are expensive in a
-worker, so they run on one frame in sixteen, and what they add to the average
-frame is listed as `timing the passes`. Late frames that keep happening turn the sim
-group red. The panel is off by default and remembers its state; `?reset`
-forgets every stored setting. **Settings** (bottom right) holds the render
-resolution. The panel is `packages/frontend/src/stats.rs`.
+what turns on its extra timing (the renderer's CPU scopes and phase clocks, the
+per-pass GPU numbers, the sim's split), so a collapsed group, or a hidden
+panel, costs nothing; an expanded one is timed on every frame. CPU and GPU work
+run in parallel, so each must fit the budget on its own; they do not add up,
+except when the CPU waits on the GPU, which shows as missed frames. Late frames
+that keep happening turn the sim group red. The panel is off by default and
+remembers its state; `?reset` forgets every stored setting. **Settings**
+(bottom right) holds the render resolution. The panel is `packages/frontend/src/stats.rs`.
 
 Other tasks: `task build` (production build into `dist/`), `task check`
 (threaded `cargo check`, no serve), `task lint` (clippy), `task fmt` (format),

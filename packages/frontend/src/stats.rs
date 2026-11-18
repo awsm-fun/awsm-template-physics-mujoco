@@ -5,6 +5,8 @@
 //! spent it, and every number says its unit and what it is per:
 //!
 //! ```text
+//! frame budget               the display's refresh period, and what each lane
+//!                            (the GPU, each thread) uses of it per frame.
 //! display                    the display's refresh rate (measured here, from
 //!                            this thread's own animation frames), the frames
 //!                            the render worker presented per second, and the
@@ -15,9 +17,9 @@
 //!                            overlapped (Apple's) they add up to more than
 //!                            the frame.
 //! renderer (render worker)   the render worker's CPU time per frame: its four
-//!                            phases, awsm-renderer's own CPU scopes under
-//!                            `render (encode + submit)`, and what timing those
-//!                            scopes adds (`timing the passes`).
+//!                            phases, and under `render (encode + submit)`
+//!                            awsm-renderer's own CPU scopes, as `prepare`,
+//!                            `passes`, `submit` (and `hooks`).
 //! sim (MuJoCo, worker)       the MuJoCo worker's CPU time per fixed step, its
 //!                            steps per second, the frames the render worker
 //!                            drew before the sim had published the moment
@@ -30,14 +32,15 @@
 //! A group's header always shows its headline number. Expanding a group shows
 //! its breakdown, and only then is the breakdown measured: the renderer group
 //! times the frame function's phases and switches awsm-renderer's CPU tier to
-//! `SubFrame` on one frame in [`PASS_TIMING_EVERY`] (`Off` otherwise; see
-//! [`PassSampler`] for why); the GPU group passes on the per-pass GPU times
-//! (the `Frame` tier, always on for the headline, already times every pass);
-//! the sim group splits the MuJoCo worker's time into stepping and publishing.
-//! While the panel is hidden every group counts as collapsed. Main tells the
-//! render worker with a [`ProfileMsg`](crate::protocol::ProfileMsg) and the
-//! MuJoCo worker with `{kind: "profile"}`; the numbers come back about once a
-//! second, in the reports both already send.
+//! `SubFrame`, on every frame (`Off` while collapsed); the GPU group passes on
+//! the per-pass GPU times (the `Frame` tier, always on for the headline,
+//! already times every pass); the sim group splits the MuJoCo worker's time
+//! into stepping and publishing. While the panel is hidden every group counts
+//! as collapsed. Main tells the render worker with a
+//! [`ProfileMsg`](crate::protocol::ProfileMsg) and the MuJoCo worker with
+//! `{kind: "profile"}`; the numbers come back about once a second, in the
+//! reports both already send. The frame budget group measures nothing of its
+//! own: it reads the other groups' headlines.
 //!
 //! **Late frames.** Each frame draws the sim one frame behind, between the two
 //! published states around its display time (see `protocol`, "Timing"). A
@@ -61,11 +64,12 @@
 //! pauses never count as misses.
 
 use std::cell::{Cell, RefCell};
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::rc::Rc;
 
 use awsm_renderer::profiling::{
-    cpu_timing_stats, gpu_frame_timing, gpu_timing_stats, TimingStat, GPU_FRAME_SCOPE,
+    cpu_scope_kind, cpu_timing_stats, gpu_frame_timing, gpu_timing_stats, CpuScopeKind, TimingStat,
+    CPU_PREP_PREFIX, CPU_SUBMIT_PREFIX, GPU_FRAME_SCOPE,
 };
 use dominator::{clone, html, Dom};
 use futures_signals::map_ref;
@@ -102,28 +106,10 @@ const PHASE_NAMES: [&str; PHASES] = [
     "update transforms",
     "render (encode + submit)",
 ];
-/// awsm-renderer's own scope around the whole of `render()`: the same time as
-/// our render phase, so it is not listed among the passes.
-const WHOLE_RENDER_SCOPE: &str = "Render";
-/// The per-pass CPU scopes are on for one frame in this many (see
-/// [`PassSampler`]).
-const PASS_TIMING_EVERY: u64 = 16;
-/// The scope cost in use is the median of this many estimates, one per report
-/// that had frames of both kinds: a few seconds' worth.
-const SCOPE_ESTIMATES: usize = 5;
-
 /// Times the phases of one frame. Only built while the renderer group is open.
 pub struct PhaseClock {
     t: f64,
     ms: [f64; PHASES],
-    scopes: bool,
-}
-
-impl PhaseClock {
-    /// Whether awsm-renderer's per-pass CPU scopes are on for this frame.
-    pub fn scopes(&self) -> bool {
-        self.scopes
-    }
 }
 
 /// Charge the time since the last lap to `phase` (a no-op without a clock).
@@ -135,197 +121,70 @@ pub fn lap(clock: &mut Option<PhaseClock>, phase: Phase) {
     }
 }
 
-/// The renderer group's breakdown, while it is expanded.
-///
-/// awsm-renderer's per-pass CPU scopes are costly here: each looks the clock
-/// up through the global object at both ends, which in a worker takes far
-/// longer than many of the passes it times. So that looking does not change
-/// what is looked at:
-///
-/// * the scopes are on for one frame in [`PASS_TIMING_EVERY`] only, and the
-///   phases are taken from the other frames, which are undisturbed;
-/// * what the scopes cost is measured, as the difference between the render
-///   phase with and without them, and reported as a row of its own. One
-///   estimate is made per report and the median of the last few is used, so
-///   that a frame that hitched (a pipeline compile, a collection) does not
-///   pass for the scopes' doing;
-/// * each pass has the scope's share of its reading taken out. A scope's
-///   reading runs from the end of its first lookup to the end of its second,
-///   so it contains one of the two: half of what the scope costs.
-///
-/// Everything is kept as running totals; a report sends the means of the
-/// change since the last one (3–4 timed frames a second at 60 fps).
-#[derive(Default)]
-struct PassSampler {
-    /// Over the frames WITHOUT the scopes: each phase, and the frames.
+/// The renderer group's breakdown, while it is expanded: every frame is timed,
+/// our phases and awsm-renderer's CPU scopes alike. A report sends the means
+/// per frame since the last one.
+struct Breakdown {
+    frames: u64,
     phase_ms: [f64; PHASES],
-    plain_frames: u64,
-    /// The frames WITH them so far, and the render phase on those since the
-    /// last report.
-    timed_frames: u64,
-    window_timed_render_ms: f64,
-    /// Per scope: the renderer's totals as last read, and our running total
-    /// with the scope's own share taken out.
-    passes: HashMap<&'static str, PassTotal>,
-    /// The latest estimates of what one scope costs, in milliseconds, and the
-    /// running total of what the scopes cost by them.
-    scope_estimates: VecDeque<f64>,
-    overhead_ms: f64,
-    /// The totals as of the last report, and the pass means it sent (kept for
-    /// a window that happens to hold no timed frame).
-    reported: Reported,
-    pass_means: Vec<(String, f64)>,
+    /// awsm-renderer's scope totals at the last report. They are cumulative
+    /// and may hold an earlier expansion's, so the first base is taken when
+    /// the group opens.
+    scope_base: Totals,
 }
 
-#[derive(Default)]
-struct PassTotal {
-    seen_ms: f64,
-    seen_count: u64,
-    net_ms: f64,
-    reported_ms: f64,
-    reported_count: u64,
-}
-
-#[derive(Default)]
-struct Reported {
-    phase_ms: [f64; PHASES],
-    plain_frames: u64,
-    timed_frames: u64,
-    overhead_ms: f64,
-}
-
-impl PassSampler {
-    /// Start from the renderer's totals as they stand: they are cumulative,
-    /// and may hold an earlier expansion's.
+impl Breakdown {
     fn new() -> Self {
-        let passes = cpu_timing_stats()
-            .into_iter()
-            .map(|(name, s)| {
-                let pass = PassTotal {
-                    seen_ms: s.total_ms,
-                    seen_count: s.count,
-                    reported_count: s.count,
-                    ..PassTotal::default()
-                };
-                (name, pass)
-            })
-            .collect();
         Self {
-            passes,
-            ..Self::default()
+            frames: 0,
+            phase_ms: [0.0; PHASES],
+            scope_base: scope_totals(),
         }
-    }
-
-    /// Whether the next frame runs with the scopes on.
-    fn timing_scopes(&self) -> bool {
-        (self.plain_frames + self.timed_frames).is_multiple_of(PASS_TIMING_EVERY)
     }
 
     fn add(&mut self, clock: PhaseClock) {
-        if clock.scopes {
-            self.window_timed_render_ms += clock.ms[Phase::Render as usize];
-            self.timed_frames += 1;
-        } else {
-            for (sum, ms) in self.phase_ms.iter_mut().zip(clock.ms) {
-                *sum += ms;
-            }
-            self.plain_frames += 1;
+        for (sum, ms) in self.phase_ms.iter_mut().zip(clock.ms) {
+            *sum += ms;
         }
+        self.frames += 1;
     }
 
-    /// Fold in what the scopes read since the last report, and put this
-    /// window's means into `report`.
     fn report(&mut self, report: &mut FrameReport) {
-        let mut window = Vec::new();
-        let mut scope_runs = 0;
-        for (name, stat) in cpu_timing_stats() {
-            let pass = self.passes.entry(name).or_default();
-            let runs = stat.count.saturating_sub(pass.seen_count);
-            let read_ms = stat.total_ms - pass.seen_ms;
-            pass.seen_count = stat.count;
-            pass.seen_ms = stat.total_ms;
-            scope_runs += runs;
-            window.push((name, runs as f64, read_ms));
+        if self.frames == 0 {
+            return;
         }
-
-        // What one scope costs: what a frame with the scopes took over one
-        // without in this window, shared among the scopes it ran.
-        let r = &self.reported;
-        let plain = self.plain_frames - r.plain_frames;
-        let timed = self.timed_frames - r.timed_frames;
-        let render = Phase::Render as usize;
-        if plain > 0 && timed > 0 && scope_runs > 0 {
-            let plain_ms = (self.phase_ms[render] - r.phase_ms[render]) / plain as f64;
-            let timed_ms = self.window_timed_render_ms / timed as f64;
-            let estimate = (timed_ms - plain_ms) * timed as f64 / scope_runs as f64;
-            if self.scope_estimates.len() == SCOPE_ESTIMATES {
-                self.scope_estimates.pop_front();
-            }
-            self.scope_estimates.push_back(estimate);
-        }
-        self.window_timed_render_ms = 0.0;
-        let scope_ms = median(&self.scope_estimates).max(0.0);
-        for (name, runs, read_ms) in window {
-            self.overhead_ms += runs * scope_ms;
-            if let Some(pass) = self.passes.get_mut(name) {
-                pass.net_ms += (read_ms - runs * scope_ms / 2.0).max(0.0);
-            }
-        }
-
-        let r = &mut self.reported;
-        if plain > 0 {
-            let n = plain as f64;
-            let mut phases = [0.0; PHASES];
-            for (i, mean) in phases.iter_mut().enumerate() {
-                *mean = (self.phase_ms[i] - r.phase_ms[i]) / n;
-            }
-            report.phases_ms = Some(phases);
-        }
-        // Passes are per TIMED frame: only those ran them.
-        if timed > 0 {
-            let n = timed as f64;
-            self.pass_means = self
-                .passes
-                .iter_mut()
-                .filter(|(name, _)| **name != WHOLE_RENDER_SCOPE)
-                .filter_map(|(name, pass)| {
-                    let ran = pass.seen_count > pass.reported_count;
-                    let mean = (pass.net_ms - pass.reported_ms) / n;
-                    pass.reported_ms = pass.net_ms;
-                    pass.reported_count = pass.seen_count;
-                    ran.then(|| (name.to_string(), mean))
-                })
-                .collect();
-            r.timed_frames = self.timed_frames;
-        }
-        report.cpu_passes = self.pass_means.clone();
-        // Over every frame: what looking adds to the renderer's time per frame.
-        let all = plain + timed;
-        if all > 0 {
-            report.pass_timing_ms = Some((self.overhead_ms - r.overhead_ms) / all as f64);
-        }
-        r.phase_ms = self.phase_ms;
-        r.plain_frames = self.plain_frames;
-        r.overhead_ms = self.overhead_ms;
+        let n = self.frames as f64;
+        report.phases_ms = Some(self.phase_ms.map(|ms| ms / n));
+        let now = scope_totals();
+        report.cpu_scopes = means(&now, &self.scope_base, n);
+        self.scope_base = now;
+        self.frames = 0;
+        self.phase_ms = [0.0; PHASES];
     }
-}
-
-/// The middle value (the upper of the two for an even count), or 0 for none.
-fn median(values: &VecDeque<f64>) -> f64 {
-    let mut sorted: Vec<f64> = values.iter().copied().collect();
-    sorted.sort_by(f64::total_cmp);
-    sorted.get(sorted.len() / 2).copied().unwrap_or(0.0)
 }
 
 /// Running `(name, total_ms)` per awsm-renderer scope.
 type Totals = Vec<(&'static str, f64)>;
 
-fn totals(stats: Vec<(&'static str, TimingStat)>, skip: &str) -> Totals {
+fn totals(stats: Vec<(&'static str, TimingStat)>, keep: impl Fn(&str) -> bool) -> Totals {
     stats
         .into_iter()
-        .filter(|(name, _)| *name != skip)
+        .filter(|(name, _)| keep(name))
         .map(|(name, s)| (name, s.total_ms))
         .collect()
+}
+
+/// The CPU scopes inside `render()`. The whole-`render()` scope is left out:
+/// it is the same time as our render phase.
+fn scope_totals() -> Totals {
+    totals(cpu_timing_stats(), |name| {
+        cpu_scope_kind(name) != CpuScopeKind::Frame
+    })
+}
+
+/// The GPU passes, without the whole-frame entry (the group's headline).
+fn gpu_pass_totals() -> Totals {
+    totals(gpu_timing_stats(), |name| name != GPU_FRAME_SCOPE)
 }
 
 /// Each scope's time since `base`, divided by `per`; scopes that did not run
@@ -357,7 +216,7 @@ pub struct FrameWindow {
     gpu_base: Option<(f64, u64)>,
     profile: Profile,
     /// The renderer group's breakdown, while it is expanded.
-    sampler: Option<PassSampler>,
+    breakdown: Option<Breakdown>,
     /// GPU group: the pass totals and the sampled-frame count at the window's
     /// start.
     gpu_pass_base: (u64, Totals),
@@ -375,7 +234,7 @@ impl FrameWindow {
             gpu_available,
             gpu_base: None,
             profile: Profile::default(),
-            sampler: None,
+            breakdown: None,
             gpu_pass_base: (0, Vec::new()),
         }
     }
@@ -384,14 +243,11 @@ impl FrameWindow {
     /// of a group that opened (or closed).
     pub fn set_profile(&mut self, p: Profile) {
         if p.renderer != self.profile.renderer {
-            self.sampler = p.renderer.then(PassSampler::new);
+            self.breakdown = p.renderer.then(Breakdown::new);
         }
         if p.gpu != self.profile.gpu {
             self.gpu_pass_base = if p.gpu {
-                (
-                    gpu_frames().map_or(0, |f| f.1),
-                    totals(gpu_timing_stats(), GPU_FRAME_SCOPE),
-                )
+                (gpu_frames().map_or(0, |f| f.1), gpu_pass_totals())
             } else {
                 (0, Vec::new())
             };
@@ -401,12 +257,11 @@ impl FrameWindow {
 
     /// Start a frame at `t` (`performance.now()`): its phase clock while the
     /// renderer group is open. The caller switches awsm-renderer's CPU tier to
-    /// [`PhaseClock::scopes`] (`Off` without a clock).
+    /// `SubFrame` with a clock and `Off` without.
     pub fn begin_frame(&mut self, t: f64) -> Option<PhaseClock> {
-        self.sampler.as_ref().map(|s| PhaseClock {
+        self.breakdown.as_ref().map(|_| PhaseClock {
             t,
             ms: [0.0; PHASES],
-            scopes: s.timing_scopes(),
         })
     }
 
@@ -422,8 +277,8 @@ impl FrameWindow {
         phases: Option<PhaseClock>,
     ) -> Option<FrameReport> {
         // Pauses or not: the renderer's scopes count every frame they ran.
-        if let (Some(s), Some(p)) = (self.sampler.as_mut(), phases) {
-            s.add(p);
+        if let (Some(b), Some(p)) = (self.breakdown.as_mut(), phases) {
+            b.add(p);
         }
         let prev = self.prev_t.replace(t)?; // the first frame only starts the clock
         let dt = t - prev;
@@ -457,15 +312,15 @@ impl FrameWindow {
         };
         if self.profile.gpu {
             let sampled = gpu_now.map_or(0, |f| f.1);
-            let now = totals(gpu_timing_stats(), GPU_FRAME_SCOPE);
+            let now = gpu_pass_totals();
             let (c0, base) = &self.gpu_pass_base;
             if sampled > *c0 {
                 report.gpu_passes = means(&now, base, (sampled - c0) as f64);
             }
             self.gpu_pass_base = (sampled, now);
         }
-        if let Some(s) = self.sampler.as_mut() {
-            s.report(&mut report);
+        if let Some(b) = self.breakdown.as_mut() {
+            b.report(&mut report);
         }
         self.frames = 0;
         self.span_ms = 0.0;
@@ -514,6 +369,17 @@ const REFRESH_INLIER: f64 = 0.15;
 /// Late frames in this many windows in a row turn the sim red: a steady
 /// condition, not a one-off such as a tab switch.
 const LATE_WINDOWS: u32 = 3;
+/// awsm-renderer's CPU scopes whose mean is below this (1 µs) are folded into
+/// one row of their subgroup.
+const FOLD_BELOW_MS: f64 = 0.001;
+/// The renderer's scope subgroups under the render phase, in the order they
+/// run (`Frame`, all of `render()`, is the phase itself).
+const SCOPE_GROUPS: [(CpuScopeKind, &str); 4] = [
+    (CpuScopeKind::Prep, "prepare"),
+    (CpuScopeKind::Pass, "passes"),
+    (CpuScopeKind::Submit, "submit"),
+    (CpuScopeKind::Hook, "hooks"),
+];
 
 /// The MuJoCo worker's report (`{kind: "stats"}`, about once a second).
 pub struct SimReport {
@@ -531,8 +397,9 @@ pub struct SimReport {
 struct Row {
     label: String,
     value: String,
-    /// A breakdown of the row above (the renderer's scopes under `render`).
-    nested: bool,
+    /// 0 for a group's own rows; 1 and 2 for a breakdown of a row above (the
+    /// renderer's scope subgroups under `render`, and their scopes).
+    indent: u8,
     bad: bool,
 }
 
@@ -541,8 +408,15 @@ impl Row {
         Self {
             label: label.into(),
             value,
-            nested: false,
+            indent: 0,
             bad: false,
+        }
+    }
+
+    fn nested(indent: u8, label: impl Into<String>, value: String) -> Self {
+        Self {
+            indent,
+            ..Self::new(label, value)
         }
     }
 }
@@ -610,7 +484,8 @@ impl Group {
                 .children_signal_vec(self.rows.signal_cloned().to_signal_vec().map(|row| {
                     html!("div", {
                         .class("stats-row")
-                        .apply_if(row.nested, |d| d.class("stats-nested"))
+                        .apply_if(row.indent == 1, |d| d.class("stats-nested"))
+                        .apply_if(row.indent == 2, |d| d.class("stats-nested-2"))
                         .apply_if(row.bad, |d| d.class("stats-bad"))
                         .child(html!("span", { .text(&row.label) }))
                         .child(html!("span", { .text(&row.value) }))
@@ -638,6 +513,7 @@ struct PageWork {
 /// The panel's state; owned by the main thread.
 pub struct Stats {
     panel: Mutable<bool>,
+    budget: Group,
     display: Group,
     gpu: Group,
     renderer: Group,
@@ -661,6 +537,8 @@ struct State {
     gpu_available: bool,
     step_ema: Option<f64>,
     steps_ema: Option<f64>,
+    /// The MuJoCo worker's busy time per ms of real time.
+    sim_load_ema: Option<f64>,
     page_ema: Option<f64>,
     /// The page's two animation-frame loops, per frame.
     page_rows: Vec<(String, f64)>,
@@ -675,8 +553,7 @@ struct State {
     /// longer measured (its group closed, or the pass did not run) and drops
     /// out rather than show a stale figure.
     phases: Vec<(String, f64)>,
-    cpu_passes: Vec<(String, f64)>,
-    pass_timing: Option<f64>,
+    cpu_scopes: Vec<(String, f64)>,
     gpu_passes: Vec<(String, f64)>,
     sim_phases: Vec<(String, f64)>,
 }
@@ -695,6 +572,7 @@ impl Stats {
                 !coarse_pointer(window)
                     && stored_bool(window, &format!("{prefix}stats")) == Some(true),
             ),
+            budget: group("budget", "frame budget"),
             display: group("display", "display"),
             gpu: group("gpu", "GPU"),
             renderer: group("renderer", "renderer (render worker)"),
@@ -742,8 +620,9 @@ impl Stats {
         stats
     }
 
-    fn groups(&self) -> [&Group; 5] {
+    fn groups(&self) -> [&Group; 6] {
         [
+            &self.budget,
             &self.display,
             &self.gpu,
             &self.renderer,
@@ -847,8 +726,7 @@ impl Stats {
             .map(|p| PHASE_NAMES.iter().map(|n| n.to_string()).zip(p).collect())
             .unwrap_or_default();
         st.phases = smooth_named(&st.phases, phases);
-        st.cpu_passes = smooth_named(&st.cpu_passes, r.cpu_passes);
-        st.pass_timing = r.pass_timing_ms.and_then(|ms| smooth(st.pass_timing, ms));
+        st.cpu_scopes = smooth_named(&st.cpu_scopes, r.cpu_scopes);
         st.gpu_passes = smooth_named(&st.gpu_passes, r.gpu_passes);
         self.show(&st);
     }
@@ -862,6 +740,7 @@ impl Stats {
         let steps = f64::from(s.steps);
         st.steps_ema = smooth(st.steps_ema, steps * 1000.0 / s.span_ms);
         st.step_ema = smooth(st.step_ema, s.busy_ms / steps);
+        st.sim_load_ema = smooth(st.sim_load_ema, s.busy_ms / s.span_ms);
         let split: Vec<(String, f64)> = s
             .split
             .filter(|(_, n)| *n > 0)
@@ -886,7 +765,10 @@ impl Stats {
             return;
         }
 
-        let hz = refresh_period(&self.refresh.borrow()).map_or("measuring…".to_string(), |p| {
+        let period = refresh_period(&self.refresh.borrow());
+        self.show_budget(st, period);
+
+        let hz = period.map_or("measuring…".to_string(), |p| {
             format!("{:.0} Hz", 1000.0 / p)
         });
         let fps = st.fps_ema.unwrap_or(0.0);
@@ -918,30 +800,13 @@ impl Stats {
         );
 
         // The phases in the order they run, with awsm-renderer's CPU scopes
-        // listed under the phase that runs them.
+        // under the phase that runs them.
         let mut rows = Vec::new();
         for (name, ms) in &st.phases {
             rows.push(Row::new(name, per_frame(*ms)));
-            if name != PHASE_NAMES[Phase::Render as usize] || st.cpu_passes.is_empty() {
-                continue;
+            if name == PHASE_NAMES[Phase::Render as usize] {
+                rows.extend(scope_rows(*ms, &st.cpu_scopes));
             }
-            let nested = |label: &str, ms: f64| Row {
-                nested: true,
-                ..Row::new(label, per_frame(ms))
-            };
-            rows.extend(slowest_first(&st.cpu_passes).map(|(n, ms)| nested(n, *ms)));
-            // What render() spends that no scope accounts for: uploads,
-            // culling, bookkeeping.
-            let in_passes: f64 = st.cpu_passes.iter().map(|p| p.1).sum();
-            rows.push(nested("outside the passes", (ms - in_passes).max(0.0)));
-        }
-        // The one part of the headline that is there because the group is
-        // open: the per-pass scopes are costly, so they run on some frames.
-        if let Some(ms) = st.pass_timing {
-            rows.push(Row::new(
-                "timing the passes (only while open)",
-                per_frame(ms),
-            ));
         }
         self.renderer
             .set(st.cpu_ema.map_or("—".to_string(), per_frame), rows, false);
@@ -978,6 +843,126 @@ impl Stats {
             false,
         );
     }
+
+    /// The frame budget group: what each lane uses of one refresh period.
+    ///
+    /// CPU and GPU work run in parallel, so each must fit the budget on its
+    /// own; they do not add up, except when the CPU waits on the GPU, which
+    /// shows as missed frames. Hence headroom is against the largest lane,
+    /// and the renderer + GPU sum is shown for reference only.
+    fn show_budget(&self, st: &State, period: Option<f64>) {
+        let Some(budget) = period else {
+            self.budget.set("measuring…".to_string(), Vec::new(), false);
+            return;
+        };
+        // The sim's busy share of real time, times the real time per frame
+        // drawn: its time per step × steps per frame.
+        let sim = st
+            .sim_load_ema
+            .zip(st.fps_ema.filter(|f| *f > 0.0))
+            .map(|(load, fps)| load * 1000.0 / fps);
+        let lanes = [
+            (self.gpu.label, st.gpu_ema),
+            (self.renderer.label, st.cpu_ema),
+            (self.sim.label, sim),
+            (self.page.label, st.page_ema),
+        ];
+        let mut rows: Vec<Row> = lanes
+            .iter()
+            .filter_map(|(label, used)| used.map(|u| Row::new(*label, budget_share(u, budget))))
+            .collect();
+        if let (Some(cpu), Some(gpu)) = (st.cpu_ema, st.gpu_ema) {
+            rows.push(Row::new(
+                "latency (renderer + GPU), reference only",
+                format!("{:.1} ms", cpu + gpu),
+            ));
+        }
+        let largest = lanes.iter().filter_map(|l| l.1).reduce(f64::max);
+        let (headline, over) = budget_headline(budget, largest);
+        self.budget.set(headline, rows, over);
+    }
+}
+
+/// `16.7 ms (60 Hz) · headroom 9.5 ms`, or `· over by 1.2 ms` (and `true`)
+/// when the largest lane does not fit.
+fn budget_headline(budget: f64, largest: Option<f64>) -> (String, bool) {
+    let mut s = format!("{budget:.1} ms ({:.0} Hz)", 1000.0 / budget);
+    let Some(used) = largest else {
+        return (s, false);
+    };
+    let headroom = budget - used;
+    if headroom < 0.0 {
+        s.push_str(&format!(" · over by {:.1} ms", -headroom));
+    } else {
+        s.push_str(&format!(" · headroom {headroom:.1} ms"));
+    }
+    (s, headroom < 0.0)
+}
+
+/// One lane's row: `0.6 / 16.7 ms (4%)`.
+fn budget_share(used: f64, budget: f64) -> String {
+    let used_s = if used > 0.0 && used < 0.05 {
+        "<0.1".to_string()
+    } else {
+        format!("{used:.1}")
+    };
+    let pct = used / budget * 100.0;
+    let pct_s = if pct > 0.0 && pct < 1.0 {
+        "<1%".to_string()
+    } else {
+        format!("{pct:.0}%")
+    };
+    format!("{used_s} / {budget:.1} ms ({pct_s})")
+}
+
+/// awsm-renderer's CPU scopes under the render phase (`render_ms`): one
+/// subgroup per kind with its sum, its scopes slowest first and those under
+/// 1 µs folded into one row, then what no scope covers (the glue between
+/// them). Nothing without scopes.
+fn scope_rows(render_ms: f64, scopes: &[(String, f64)]) -> Vec<Row> {
+    let mut rows = Vec::new();
+    if scopes.is_empty() {
+        return rows;
+    }
+    let mut in_scopes = 0.0;
+    for (kind, label) in SCOPE_GROUPS {
+        let mut members: Vec<(&str, f64)> = scopes
+            .iter()
+            .filter(|(name, _)| cpu_scope_kind(name) == kind)
+            .map(|(name, ms)| {
+                let short = name
+                    .strip_prefix(CPU_PREP_PREFIX)
+                    .or_else(|| name.strip_prefix(CPU_SUBMIT_PREFIX))
+                    .unwrap_or(name);
+                (short, *ms)
+            })
+            .collect();
+        if members.is_empty() {
+            continue;
+        }
+        members.sort_by(|a, b| b.1.total_cmp(&a.1));
+        let sum: f64 = members.iter().map(|m| m.1).sum();
+        in_scopes += sum;
+        rows.push(Row::nested(1, label, per_frame(sum)));
+        let (shown, folded): (Vec<_>, Vec<_>) =
+            members.into_iter().partition(|m| m.1 >= FOLD_BELOW_MS);
+        rows.extend(
+            shown
+                .into_iter()
+                .map(|(name, ms)| Row::nested(2, name, per_frame(ms))),
+        );
+        if !folded.is_empty() {
+            let ms = folded.iter().map(|m| m.1).sum();
+            let label = format!("{} more under 1 µs", folded.len());
+            rows.push(Row::nested(2, label, per_frame(ms)));
+        }
+    }
+    rows.push(Row::nested(
+        1,
+        "outside the scopes",
+        per_frame((render_ms - in_scopes).max(0.0)),
+    ));
+    rows
 }
 
 fn smooth(ema: Option<f64>, v: f64) -> Option<f64> {
@@ -1130,19 +1115,52 @@ mod tests {
     }
 
     #[test]
-    fn the_scopes_run_on_one_frame_in_sixteen() {
-        let mut s = PassSampler::default();
-        let mut timed = 0;
-        for _ in 0..32 {
-            let scopes = s.timing_scopes();
-            timed += u32::from(scopes);
-            s.add(PhaseClock {
-                t: 0.0,
-                ms: [0.0; PHASES],
-                scopes,
-            });
-        }
-        assert_eq!((timed, s.timed_frames, s.plain_frames), (2, 2, 30));
+    fn scopes_group_by_kind_and_fold_the_small_ones() {
+        let scopes: Vec<(String, f64)> = [
+            ("Prep: Camera Upload", 0.038),
+            ("Prep: Bind Groups", 0.0004),
+            ("Prep: Frame Setup", 0.0003),
+            ("Geometry RenderPass", 0.034),
+            ("Submit: Finish + Queue Submit", 0.015),
+        ]
+        .into_iter()
+        .map(|(n, ms)| (n.to_string(), ms))
+        .collect();
+        let rows: Vec<(u8, String)> = scope_rows(0.1, &scopes)
+            .into_iter()
+            .map(|r| (r.indent, r.label))
+            .collect();
+        let labels: Vec<(u8, &str)> = rows.iter().map(|(i, l)| (*i, l.as_str())).collect();
+        assert_eq!(
+            labels,
+            [
+                (1, "prepare"),
+                (2, "Camera Upload"),
+                (2, "2 more under 1 µs"),
+                (1, "passes"),
+                (2, "Geometry RenderPass"),
+                (1, "submit"),
+                (2, "Finish + Queue Submit"),
+                (1, "outside the scopes"),
+            ]
+        );
+        assert!(scope_rows(0.1, &[]).is_empty());
+    }
+
+    #[test]
+    fn budget_reads_used_over_budget() {
+        assert_eq!(budget_share(7.2, 16.7), "7.2 / 16.7 ms (43%)");
+        assert_eq!(budget_share(0.01, 16.7), "<0.1 / 16.7 ms (<1%)");
+        assert_eq!(budget_share(0.0, 16.7), "0.0 / 16.7 ms (0%)");
+        let budget = 1000.0 / 60.0;
+        assert_eq!(
+            budget_headline(budget, Some(7.2)),
+            ("16.7 ms (60 Hz) · headroom 9.5 ms".to_string(), false)
+        );
+        assert_eq!(
+            budget_headline(budget, Some(17.9)),
+            ("16.7 ms (60 Hz) · over by 1.2 ms".to_string(), true)
+        );
     }
 
     #[test]
@@ -1164,6 +1182,6 @@ mod tests {
         assert_eq!(r.frames, 50);
         assert!((r.span_ms - 1000.0).abs() < 1e-6);
         // The renderer group is closed: no breakdown.
-        assert!(r.phases_ms.is_none() && r.cpu_passes.is_empty());
+        assert!(r.phases_ms.is_none() && r.cpu_scopes.is_empty());
     }
 }

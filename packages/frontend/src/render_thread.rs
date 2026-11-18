@@ -38,7 +38,7 @@ use crate::protocol::{
     abs_ms_to_us, header, time_diff_us, CameraMsg, Layout, OrbitState, Profile, ProfileMsg,
     RenderMsg, ResizeMsg, CONTACT_STRIDE, JOINT_STRIDE, MAX_CONTACTS, POSE_SLOTS, POSE_STRIDE,
 };
-use crate::stats::{lap, Phase, PhaseClock};
+use crate::stats::{lap, Phase};
 
 /// The boxed RAF callback, self-referenced so the render loop can reschedule
 /// itself each frame (and stays alive for the worker's lifetime).
@@ -371,6 +371,9 @@ async fn run(
     let raf_run = raf.clone();
     let mut frame_count: u32 = 0;
     // Presented frames and their timing, for the page's Stats panel.
+    // In 0.43 `gpu_timestamps` exists only once the GPU tier is on; the
+    // builder sets `gpu: Frame`, so here it is `Some` exactly when the device
+    // has timestamp queries.
     let mut frame_window = crate::stats::FrameWindow::new(cell.borrow().gpu_timestamps.is_some());
     // This worker's clock origin: frame times are sent as absolute times, the
     // one timeline every thread of the page shares.
@@ -391,11 +394,11 @@ async fn run(
         }
         let mut r = cell.borrow_mut();
 
-        // The renderer group's breakdown is timed only while it is expanded,
-        // and awsm-renderer's per-pass scopes only on some of those frames.
+        // The renderer group's breakdown (our phases and awsm-renderer's CPU
+        // scopes) is timed on every frame while it is expanded, never else.
         frame_window.set_profile(profile.get());
         let mut phases = frame_window.begin_frame(frame_start);
-        let tier = if phases.as_ref().is_some_and(PhaseClock::scopes) {
+        let tier = if phases.is_some() {
             awsm_renderer::debug::TimingTier::SubFrame
         } else {
             awsm_renderer::debug::TimingTier::Off

@@ -269,13 +269,12 @@ pub struct FrameReport {
     pub gpu_available: bool,
     /// Mean GPU time per frame over the window, when there was a sample.
     pub gpu_ms: Option<f64>,
-    /// Only while the renderer group is open (see `crate::stats::PassSampler`):
-    /// the mean per frame of each of the frame function's phases
-    /// (`crate::stats::Phase` order), of each of awsm-renderer's CPU scopes
-    /// inside `render()`, and of what those scopes themselves cost.
+    /// Only while the renderer group is open: the mean per frame of each of
+    /// the frame function's phases (`crate::stats::Phase` order), and of each
+    /// of awsm-renderer's CPU scopes inside `render()` (named as the renderer
+    /// names them; the panel groups them with `cpu_scope_kind`).
     pub phases_ms: Option<[f64; crate::stats::PHASES]>,
-    pub cpu_passes: Vec<(String, f64)>,
-    pub pass_timing_ms: Option<f64>,
+    pub cpu_scopes: Vec<(String, f64)>,
     /// Only while the GPU group is open: the mean per frame of each GPU pass,
     /// slowest first.
     pub gpu_passes: Vec<(String, f64)>,
