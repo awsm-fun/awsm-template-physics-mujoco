@@ -25,7 +25,7 @@
 //! Everything else is the stock player template: bundle load, orbit camera,
 //! resize.
 
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
 
@@ -35,9 +35,10 @@ use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 
 use crate::protocol::{
-    abs_ms_to_us, header, time_diff_us, CameraMsg, Layout, OrbitState, RenderMsg, ResizeMsg,
-    CONTACT_STRIDE, JOINT_STRIDE, MAX_CONTACTS, POSE_SLOTS, POSE_STRIDE,
+    abs_ms_to_us, header, time_diff_us, CameraMsg, Layout, OrbitState, Profile, ProfileMsg,
+    RenderMsg, ResizeMsg, CONTACT_STRIDE, JOINT_STRIDE, MAX_CONTACTS, POSE_SLOTS, POSE_STRIDE,
 };
+use crate::stats::{lap, Phase, PhaseClock};
 
 /// The boxed RAF callback, self-referenced so the render loop can reschedule
 /// itself each frame (and stays alive for the worker's lifetime).
@@ -253,6 +254,14 @@ async fn run(
             smaa: false,
             mipmap: true,
         })
+        // GPU frame timing for the Stats panel's GPU group: timestamp queries
+        // on every pass, folded into one whole-frame span (cheap; silently
+        // off without `timestamp-query`). The CPU tier stays `Off` until the
+        // renderer group is expanded.
+        .with_logging(awsm_renderer::debug::AwsmRendererLogging {
+            gpu: awsm_renderer::debug::TimingTier::Frame,
+            ..Default::default()
+        })
         .with_phase_handler(|phase| {
             use awsm_renderer::RendererLoadingPhase as P;
             let message = match phase {
@@ -339,6 +348,8 @@ async fn run(
     // model. There is exactly one in this template's scene; a multi-robot world
     // would key these by fingerprint instead.
     let pending = Rc::new(RefCell::new(sim_instance));
+    // Which Stats groups are expanded (main sends it on change).
+    let profile = Rc::new(Cell::new(Profile::default()));
 
     install_onmessage(
         cell.clone(),
@@ -347,6 +358,7 @@ async fn run(
         camera.clone(),
         canvas.clone(),
         overlays,
+        profile.clone(),
     )?;
     // Only now is the worker listening — main holds the model message until
     // this arrives.
@@ -359,7 +371,7 @@ async fn run(
     let raf_run = raf.clone();
     let mut frame_count: u32 = 0;
     // Presented frames and their timing, for the page's Stats panel.
-    let mut frame_window = crate::stats::FrameWindow::new();
+    let mut frame_window = crate::stats::FrameWindow::new(cell.borrow().gpu_timestamps.is_some());
     // This worker's clock origin: frame times are sent as absolute times, the
     // one timeline every thread of the page shares.
     let time_origin = crate::stats::worker_time_origin();
@@ -379,6 +391,19 @@ async fn run(
         }
         let mut r = cell.borrow_mut();
 
+        // The renderer group's breakdown is timed only while it is expanded,
+        // and awsm-renderer's per-pass scopes only on some of those frames.
+        frame_window.set_profile(profile.get());
+        let mut phases = frame_window.begin_frame(frame_start);
+        let tier = if phases.as_ref().is_some_and(PhaseClock::scopes) {
+            awsm_renderer::debug::TimingTier::SubFrame
+        } else {
+            awsm_renderer::debug::TimingTier::Off
+        };
+        if r.logging.cpu != tier {
+            r.logging.cpu = tier;
+        }
+
         // Tell the sim this frame has started, then draw the sim at the time
         // fixed by the previous frame (see `protocol`, "Timing").
         let mut late = false;
@@ -386,6 +411,7 @@ async fn run(
             let display_us = m.begin_frame(abs_ms_to_us(now_abs_ms));
             late = apply_poses(&mut r, m, display_us);
         }
+        lap(&mut phases, Phase::Read);
 
         let mut cam = camera.borrow_mut();
         cam.select(now_abs_ms, period_ms);
@@ -395,11 +421,14 @@ async fn run(
         params.focus_distance = cam.state.radius;
         let _ = r.set_camera(view, params);
         drop(cam);
+        lap(&mut phases, Phase::Camera);
 
         r.update_transforms();
+        lap(&mut phases, Phase::Transforms);
         if let Err(err) = r.render(None) {
             tracing::warn!("render thread: render error: {err}");
         }
+        lap(&mut phases, Phase::Render);
         drop(r);
 
         frame_count = frame_count.wrapping_add(1);
@@ -407,8 +436,8 @@ async fn run(
             post_to_main(&RenderMsg::Ready);
         }
         let cpu_ms = crate::stats::worker_now() - frame_start;
-        if let Some(msg) = frame_window.frame(vsync_ms, cpu_ms, late) {
-            post_to_main(&msg);
+        if let Some(report) = frame_window.frame(vsync_ms, cpu_ms, late, phases) {
+            post_to_main(&RenderMsg::Stats(report));
         }
         if let Some(cb) = raf_run.borrow().as_ref() {
             let _ = awsm_renderer::web_global::request_animation_frame(cb.as_ref().unchecked_ref());
@@ -819,7 +848,8 @@ struct OverlayToggles {
 }
 
 /// Install this worker's post-load `onmessage`: the forwarded MuJoCo model
-/// description (`kind: "mujoco-model"`), canvas resizes, and the camera state.
+/// description (`kind: "mujoco-model"`), canvas resizes, the camera state, and
+/// which Stats groups are expanded.
 fn install_onmessage(
     // The pose path never touches the renderer here — that is the point of the
     // migration — but the DEBUG overlay has to mint its own nodes, so the
@@ -830,6 +860,7 @@ fn install_onmessage(
     camera: Rc<RefCell<OrbitCamera>>,
     canvas: web_sys::OffscreenCanvas,
     overlays: OverlayToggles,
+    profile: Rc<Cell<Profile>>,
 ) -> Result<(), JsValue> {
     let scope = js_sys::global().unchecked_into::<web_sys::DedicatedWorkerGlobalScope>();
     let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
@@ -881,9 +912,13 @@ fn install_onmessage(
             return;
         }
         if let Ok(CameraMsg::State { t_ms, state }) =
-            serde_wasm_bindgen::from_value::<CameraMsg>(data)
+            serde_wasm_bindgen::from_value::<CameraMsg>(data.clone())
         {
             camera.borrow_mut().post(t_ms, state);
+            return;
+        }
+        if let Ok(ProfileMsg::Set(p)) = serde_wasm_bindgen::from_value::<ProfileMsg>(data) {
+            profile.set(p);
         }
     });
     scope.set_onmessage(Some(cb.as_ref().unchecked_ref()));

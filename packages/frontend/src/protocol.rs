@@ -11,11 +11,13 @@
 //!   knows nothing about MuJoCo or transports, it just gets world poses applied
 //!   to nodes.
 //! - **main ↔ render worker**: small serde messages (progress, resize, the
-//!   camera state) over `postMessage`.
+//!   camera state, the Stats report and which Stats groups are open) over
+//!   `postMessage`.
 //! - **main ↔ MuJoCo worker**: raw JS objects (`{kind: ...}`) — see
 //!   `web/workers/mujoco-worker.js`; the model description crosses once at
 //!   startup, tagged `kind: "model"`, and is forwarded to the render worker
-//!   verbatim as `kind: "mujoco-model"`.
+//!   verbatim as `kind: "mujoco-model"`. The sim's Stats numbers come back
+//!   about once a second (`kind: "stats"`).
 //!
 //! ## Timing: one clock, fixed steps, interpolated display
 //!
@@ -244,22 +246,53 @@ pub enum RenderMsg {
     SceneReady,
     /// First real frames have been presented.
     Ready,
-    /// About once a second: the frames presented since the last report, the
-    /// time they covered (rAF timestamp to rAF timestamp, pauses left out),
-    /// and the render worker's CPU time for them. The Stats panel turns these
-    /// into fps, missed frames and CPU time per frame (see `crate::stats`).
-    ///
-    /// `late` counts the frames that found no sim state at their display time
-    /// (the sim had not finished its burst) and held the newest pose instead.
-    Stats {
-        frames: u32,
-        span_ms: f64,
-        cpu_ms: f64,
-        late: u32,
-    },
+    /// About once a second, for the Stats panel (see `crate::stats`).
+    Stats(FrameReport),
     Error {
         message: String,
     },
+}
+
+/// The render worker's Stats report: one window of about a second.
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
+pub struct FrameReport {
+    /// Frames presented, and the time they covered (rAF timestamp to rAF
+    /// timestamp, pauses left out).
+    pub frames: u32,
+    pub span_ms: f64,
+    /// The render worker's CPU time for those frames (the whole frame function).
+    pub cpu_ms: f64,
+    /// Frames that found no sim state at their display time (the sim had not
+    /// finished its burst) and held the newest pose instead.
+    pub late: u32,
+    /// Whether the device has timestamp queries (else no GPU numbers, ever).
+    pub gpu_available: bool,
+    /// Mean GPU time per frame over the window, when there was a sample.
+    pub gpu_ms: Option<f64>,
+    /// Only while the renderer group is open (see `crate::stats::PassSampler`):
+    /// the mean per frame of each of the frame function's phases
+    /// (`crate::stats::Phase` order), of each of awsm-renderer's CPU scopes
+    /// inside `render()`, and of what those scopes themselves cost.
+    pub phases_ms: Option<[f64; crate::stats::PHASES]>,
+    pub cpu_passes: Vec<(String, f64)>,
+    pub pass_timing_ms: Option<f64>,
+    /// Only while the GPU group is open: the mean per frame of each GPU pass,
+    /// slowest first.
+    pub gpu_passes: Vec<(String, f64)>,
+}
+
+/// Which Stats groups are open (and the panel shown): the render worker runs
+/// the extra timing for a group only then.
+#[derive(Serialize, Deserialize, Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct Profile {
+    pub renderer: bool,
+    pub gpu: bool,
+}
+
+/// Main → render worker: see [`Profile`].
+#[derive(Serialize, Deserialize, Debug, Clone, Copy)]
+pub enum ProfileMsg {
+    Set(Profile),
 }
 
 /// Main → render worker: canvas backing-store resize (device pixels).

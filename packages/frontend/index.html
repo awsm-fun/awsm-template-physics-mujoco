@@ -19,14 +19,22 @@
         .hud { position: fixed; top: 10px; left: 12px; font-size: 13px; line-height: 1.5; white-space: pre; opacity: 0.85; pointer-events: none; }
         .hud .key { color: #7fd1ff; }
         /* Stats panel (top right), driven from src/stats.rs. Hidden by
-           default; the bottom-left Stats chip toggles it. */
-        .stats { position: fixed; top: 10px; right: 12px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; white-space: pre; text-align: left; color: #9fb4d8; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 8px; padding: 8px 12px; pointer-events: none; backdrop-filter: blur(4px); }
+           default; the bottom-left Stats chip toggles it. One group per
+           thread: a header button (name left, headline right) that toggles
+           the rows under it. */
+        .stats { position: fixed; top: 10px; right: 12px; min-width: 330px; max-height: calc(100vh - 80px); overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; white-space: pre; color: #9fb4d8; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 8px; padding: 6px 8px; backdrop-filter: blur(4px); }
+        .stats-group, .stats-row { display: flex; justify-content: space-between; gap: 24px; }
+        .stats-group { width: 100%; padding: 0 4px; border: 0; border-radius: 4px; background: none; color: #cfe0fb; font: inherit; text-align: left; cursor: pointer; }
+        .stats-group:hover { background: rgba(127, 209, 255, 0.1); }
+        .stats-group:focus-visible { outline: 1px solid #7fd1ff; }
+        /* A group's rows; a nested row breaks down the row above it. */
+        .stats-row { padding: 0 4px 0 calc(4px + 2ch); }
+        .stats-row.stats-nested { padding-left: calc(4px + 4ch); color: #7f93b5; }
+        /* The sim keeps arriving late (see src/stats.rs for exactly when). */
+        .stats .stats-bad { color: #ff6a5e; font-weight: 700; }
         .stats-btn { position: fixed; bottom: 18px; left: 16px; z-index: 5; font: inherit; font-size: 12px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 18px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
         .stats-btn:hover { background: rgba(20, 30, 48, 0.75); border-color: rgba(127, 209, 255, 0.45); }
         .stats-btn.active { background: rgba(20, 30, 48, 0.85); border-color: rgba(127, 209, 255, 0.6); color: #e8edf7; }
-        /* The sync line turns red when render/physics sync is genuinely bad
-           (persistent large error with the jitter buffer maxed out). */
-        .stats .sync-bad { color: #ff6a5e; font-weight: 700; }
 
         /* ── Settings button + modal (graphics controls, src/main_thread.rs) ─
            Bottom-right pill opens a modal with the resolution slider (the

@@ -16,6 +16,9 @@
 //   here → main  {kind:"model", ngeom, timestep, geom_type, geom_group,
 //                 geom_matid, geom_size, geom_rgba, mat_rgba}   (typed-array copies)
 //   main → here  {kind:"start", sab}       — begin stepping + publishing
+//   main → here  {kind:"profile", on}      — the Stats sim group is expanded
+//   here → main  {kind:"stats", span_ms, steps, busy_ms,
+//                 step_ms?, publish_ms?, split_steps?}   (about once a second)
 //   here → main  {kind:"error", message}
 //
 // This is a MODULE worker (dynamic import of the ES-module mujoco.js). It is
@@ -79,6 +82,13 @@ const MAX_CATCHUP_MS = 250;
 // cost in this whole overlay.
 let forceBuf = null;
 
+// The Stats panel's sim group. The CPU time of each wake (stepping +
+// publishing) is always measured, two clock reads per wake, for the headline;
+// the split between the two only while the group is expanded (`profiling`).
+const STATS_SPAN_MS = 1000;
+let profiling = false;
+const stats = { since: 0, steps: 0, busyMs: 0, stepMs: 0, publishMs: 0, splitSteps: 0 };
+
 const post = (obj) => self.postMessage(obj);
 const progress = (message) => post({ kind: "progress", message: `mujoco: ${message}` });
 const fail = (err) => {
@@ -92,6 +102,7 @@ self.onmessage = async (e) => {
     try {
         if (d.kind === "init") await init(d);
         else if (d.kind === "start") start(d.sab);
+        else if (d.kind === "profile") profiling = !!d.on;
     } catch (err) {
         fail(err);
     }
@@ -201,6 +212,7 @@ function run() {
     const advance = (now) => {
         acc = Math.min(acc + Math.max(now - fedTo, 0), MAX_CATCHUP_MS);
         fedTo = Math.max(fedTo, now);
+        const t0 = performance.now();
         let n = 0;
         while (acc >= stepMs) {
             mujoco.mj_step(model, data);
@@ -209,9 +221,13 @@ function run() {
         }
         if (n > 0) {
             steps_total += n;
+            const split = profiling;
+            const t1 = split ? performance.now() : 0;
             // The state just stepped to is due at fedTo - acc: the time the
             // accumulator has been fed to, less what it still holds.
             publish(fedTo - acc);
+            const t2 = performance.now();
+            report(n, t2, t2 - t0, split ? [t1 - t0, t2 - t1] : null);
         }
     };
 
@@ -240,6 +256,29 @@ function run() {
         }
         : () => setTimeout(wake, 4);
     wait();
+}
+
+// Add one wake's `n` steps, ended at `now`, and their CPU time to the Stats
+// window (`split`: [stepping, publishing] ms while the sim group is expanded),
+// and post the window to main about once a second.
+function report(n, now, busyMs, split) {
+    if (stats.since === 0) stats.since = now;
+    stats.steps += n;
+    stats.busyMs += busyMs;
+    if (split) {
+        stats.stepMs += split[0];
+        stats.publishMs += split[1];
+        stats.splitSteps += n;
+    }
+    if (now - stats.since < STATS_SPAN_MS) return;
+    const msg = { kind: "stats", span_ms: now - stats.since, steps: stats.steps, busy_ms: stats.busyMs };
+    if (stats.splitSteps > 0) {
+        msg.step_ms = stats.stepMs;
+        msg.publish_ms = stats.publishMs;
+        msg.split_steps = stats.splitSteps;
+    }
+    post(msg);
+    Object.assign(stats, { since: now, steps: 0, busyMs: 0, stepMs: 0, publishMs: 0, splitSteps: 0 });
 }
 
 // Publish the current state into the next pose slot, stamped `dueMs` (absolute

@@ -134,14 +134,27 @@ format never learn what a contact is.
 **Controls:** drag orbits the camera, wheel zooms. The sim runs itself — the
 humanoid collapses into a heap, the flag flaps forever.
 
-The **Stats** button (bottom left) opens a small panel (top right): the
-display's refresh rate (measured on the main thread, since no browser API
-reports it), frames per second, **missed frames** (refreshes that showed no new
-frame, per second and in total), **sim late** (frames that found MuJoCo had not
-yet finished the state they were due to show, and held the newest one; see
-[Timing](#timing)), and the render worker's CPU time per frame.
-It is off by default and remembers its state; **Settings** (bottom right) holds
-the render resolution. The panel is `packages/frontend/src/stats.rs`.
+The **Stats** button (bottom left) opens a small panel (top right) with one
+group per thread, each number under the thread that spent it, with its unit
+and what it is per:
+
+| Group | Headline | Rows when expanded |
+|---|---|---|
+| `display` | refresh rate · fps | refresh rate (measured on the main thread, since no browser API reports it), frames presented, **missed frames** (refreshes that showed no new frame) |
+| `GPU` | GPU time per frame (timestamp queries; `n/a` without them) | one row per pass, slowest first; on GPUs that overlap passes (Apple's) they add up to more than the frame |
+| `renderer (render worker)` | the render worker's CPU time per frame | its four phases (`read app state + interpolate`, `set camera`, `update transforms`, `render (encode + submit)`), with awsm-renderer's own CPU scopes under render, then `timing the passes` |
+| `sim (MuJoCo, worker)` | the MuJoCo worker's CPU time per step | steps/s, **late frames** (frames that found MuJoCo had not yet finished the state they were due to show, and held the newest one; see [Timing](#timing)), stepping (`mj_step`) vs publishing |
+| `page (main thread)` | the main thread's own work per frame | its two animation-frame loops: `camera frame loop`, `refresh probe` |
+
+Click a group to expand it; each remembers its state. Expanding a group is
+what turns on its extra timing (the renderer's per-pass CPU scopes, the phase
+clocks, the per-pass GPU numbers, the sim's split), so a collapsed group, or a
+hidden panel, costs nothing. The renderer's per-pass CPU timers are expensive in a
+worker, so they run on one frame in sixteen, and what they add to the average
+frame is listed as `timing the passes`. Late frames that keep happening turn the sim
+group red. The panel is off by default and remembers its state; `?reset`
+forgets every stored setting. **Settings** (bottom right) holds the render
+resolution. The panel is `packages/frontend/src/stats.rs`.
 
 Other tasks: `task build` (production build into `dist/`), `task check`
 (threaded `cargo check`, no serve), `task lint` (clippy), `task fmt` (format),
@@ -190,7 +203,7 @@ worker of the page agrees on.
    rate, one frame plus at most one step behind.
 
 If MuJoCo has not finished by the next frame, that frame holds the newest pose
-and the Stats panel counts it as **sim late**: the humanoid (5 ms steps, three
+and the Stats panel counts it as a **late frame** (sim group): the humanoid (5 ms steps, three
 or four per frame at 60 Hz) never is; the flag's cloth, at 2 ms steps (about
 eight per frame) of a costly flex, takes 11–13 ms of each 16.7 ms frame and is
 occasionally late. With no tick for 100 ms (no renderer yet, a hidden tab) the

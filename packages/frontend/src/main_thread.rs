@@ -25,14 +25,19 @@ use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use dominator::{clone, html};
-use futures_signals::signal::Mutable;
+use futures_signals::signal::{Mutable, SignalExt};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 use web_sys::{HtmlCanvasElement, MessageEvent, Worker, WorkerOptions, WorkerType};
 
 use crate::bootstrap::spawn_shared_worker_transfer;
-use crate::protocol::{CameraMsg, Layout, OrbitState, RenderMsg, Scene};
+use crate::protocol::{CameraMsg, Layout, OrbitState, ProfileMsg, RenderMsg, Scene};
+use crate::stats::{SimReport, Stats};
+
+/// Every `localStorage` key this app writes starts with this (the CDN origin is
+/// shared with other experiments).
+const STORAGE_PREFIX: &str = "awsm_mujoco_";
 
 /// Build + mount the DOM, then start the worker pipeline.
 pub fn start() -> Result<(), JsValue> {
@@ -67,9 +72,10 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     // usually embedded in an iframe on awsm.fun; a click on the canvas focuses
     // it too, since no pointer handler here cancels the press.
     let _ = window.focus();
+    maybe_reset_settings(&window);
 
-    // The Stats chip + panel (see `crate::stats`), fed by the render worker.
-    let stats = crate::stats::Stats::install(&window, "awsm_mujoco_stats");
+    // The Stats chip + panel (see `crate::stats`), fed by both workers.
+    let stats = Stats::install(&window, STORAGE_PREFIX);
 
     // Backing store at the chosen render resolution (a stored Settings choice,
     // else native capped at a pixel budget — see `resolution`). Must be sized
@@ -125,6 +131,11 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
                 Ok(RenderMsg::Progress { message }) => loading_log(&message),
                 Ok(RenderMsg::SceneReady) => {
                     scene_ready.set(true);
+                    // The worker listens from now on: tell it which Stats
+                    // groups are expanded (later changes follow, below).
+                    if let Some(render) = render_ref.borrow().as_ref() {
+                        post_profile(render, &stats);
+                    }
                     loading_log("scene ready — waiting on the MuJoCo model…");
                     maybe_start(&model_msg, &scene_ready, &render_ref, &mujoco_ref);
                 }
@@ -134,9 +145,7 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
                     stats.mark_ready();
                     status.set("running — drag orbits, wheel zooms".into());
                 }
-                Ok(RenderMsg::Stats { frames, span_ms, cpu_ms, late }) => {
-                    stats.window(frames, span_ms, cpu_ms, late);
-                }
+                Ok(RenderMsg::Stats(report)) => stats.window(report),
                 Ok(RenderMsg::Error { message }) => {
                     loading_log(&format!("ERROR: {message}"));
                     status.set(format!("render error: {message}"));
@@ -155,6 +164,14 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     )?;
     on_render_msg.forget();
     *render_ref.borrow_mut() = Some(render.clone());
+    wasm_bindgen_futures::spawn_local(stats.profile_signal().for_each(
+        clone!(render, scene_ready, stats => move |_| {
+            if scene_ready.get() {
+                post_profile(&render, &stats);
+            }
+            async {}
+        }),
+    ));
 
     // ── MuJoCo worker (plain JS module worker — its own wasm module) ────────
     loading_log("spawning MuJoCo worker…");
@@ -163,7 +180,7 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     let ab = app_base.trim_end_matches('/');
     let mujoco = Worker::new_with_options(&format!("{ab}/workers/mujoco-worker.js"), &opts)?;
     let on_mujoco_msg = Closure::<dyn FnMut(MessageEvent)>::new(clone!(
-        status, model_msg, scene_ready, render_ref, mujoco_ref => move |e: MessageEvent| {
+        status, model_msg, scene_ready, render_ref, mujoco_ref, stats => move |e: MessageEvent| {
             let data = e.data();
             let kind = js_sys::Reflect::get(&data, &JsValue::from_str("kind"))
                 .ok()
@@ -192,6 +209,7 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
                     loading_log(&format!("MUJOCO ERROR: {m}"));
                     status.set(format!("mujoco error: {m}"));
                 }
+                "stats" => stats.sim_window(sim_report(&data)),
                 _ => {}
             }
         }
@@ -221,14 +239,73 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
         )),
     );
     mujoco.post_message(&init)?;
+    // The sim group's breakdown is measured only while it is expanded.
+    wasm_bindgen_futures::spawn_local(stats.sim_profile_signal().for_each(
+        clone!(mujoco => move |on| {
+            let msg = js_sys::Object::new();
+            set(&msg, "kind", &JsValue::from_str("profile"));
+            set(&msg, "on", &JsValue::from_bool(on));
+            let _ = mujoco.post_message(&msg);
+            async {}
+        }),
+    ));
     *mujoco_ref.borrow_mut() = Some(mujoco);
 
     // Layout changes → ResizeMsg, plus the Settings modal (resolution slider).
     resolution.install(&window, &canvas, render.clone())?;
-    install_pointer(&window, &canvas, render)?;
+    install_pointer(&window, &canvas, render, stats)?;
 
     status.set("loading scene…".into());
     Ok(())
+}
+
+/// Tell the render worker which Stats groups are expanded.
+fn post_profile(render: &Worker, stats: &Stats) {
+    if let Ok(v) = serde_wasm_bindgen::to_value(&ProfileMsg::Set(stats.profile())) {
+        let _ = render.post_message(&v);
+    }
+}
+
+/// The MuJoCo worker's `{kind: "stats"}` message.
+fn sim_report(data: &JsValue) -> SimReport {
+    let num = |k: &str| {
+        js_sys::Reflect::get(data, &JsValue::from_str(k))
+            .ok()
+            .and_then(|v| v.as_f64())
+    };
+    SimReport {
+        span_ms: num("span_ms").unwrap_or(0.0),
+        steps: num("steps").unwrap_or(0.0) as u32,
+        busy_ms: num("busy_ms").unwrap_or(0.0),
+        split: match (num("step_ms"), num("publish_ms"), num("split_steps")) {
+            (Some(step), Some(publish), Some(n)) => Some(([step, publish], n as u32)),
+            _ => None,
+        },
+    }
+}
+
+/// `?reset` in the URL forgets every stored setting of this app (the panel,
+/// its groups, the render resolution), so the page boots with the defaults.
+/// Runs before anything reads one.
+fn maybe_reset_settings(window: &web_sys::Window) {
+    let search = window.location().search().unwrap_or_default();
+    let reset = web_sys::UrlSearchParams::new_with_str(&search)
+        .map(|p| p.has("reset"))
+        .unwrap_or(false);
+    let Some(ls) = reset
+        .then(|| window.local_storage().ok().flatten())
+        .flatten()
+    else {
+        return;
+    };
+    let keys: Vec<String> = (0..ls.length().unwrap_or(0))
+        .filter_map(|i| ls.key(i).ok().flatten())
+        .filter(|k| k.starts_with(STORAGE_PREFIX))
+        .collect();
+    for key in keys {
+        let _ = ls.remove_item(&key);
+    }
+    loading_log("?reset — stored settings cleared, booting with defaults");
 }
 
 /// Step-4 rendezvous: once the model description AND `SceneReady` are both in,
@@ -292,6 +369,7 @@ fn install_pointer(
     window: &web_sys::Window,
     canvas: &HtmlCanvasElement,
     render: Worker,
+    stats: Rc<Stats>,
 ) -> Result<(), JsValue> {
     let camera = Rc::new(Cell::new(OrbitState::START));
     let dragging = Rc::new(Cell::new(false));
@@ -350,17 +428,20 @@ fn install_pointer(
     let again = cb.clone();
     let mut sent: Option<OrbitState> = None;
     *cb.borrow_mut() = Some(Closure::new(move |t: f64| {
-        let state = camera.get();
-        if sent != Some(state) {
-            sent = Some(state);
-            let msg = CameraMsg::State {
-                t_ms: time_origin + t,
-                state,
-            };
-            if let Ok(v) = serde_wasm_bindgen::to_value(&msg) {
-                let _ = render.post_message(&v);
+        // This is the page's per-frame work (the Stats panel's page group).
+        stats.time_camera(|| {
+            let state = camera.get();
+            if sent != Some(state) {
+                sent = Some(state);
+                let msg = CameraMsg::State {
+                    t_ms: time_origin + t,
+                    state,
+                };
+                if let Ok(v) = serde_wasm_bindgen::to_value(&msg) {
+                    let _ = render.post_message(&v);
+                }
             }
-        }
+        });
         if let (Some(w), Some(f)) = (web_sys::window(), again.borrow().as_ref()) {
             let _ = w.request_animation_frame(f.as_ref().unchecked_ref());
         }
