@@ -241,7 +241,7 @@ fn about_tab() -> Vec<Dom> {
                    smooth at any refresh rate. The two workers meet in shared memory: the \
                    poses never go through postMessage.")
         }),
-        h3("Where to start"),
+        h3("Make it yours"),
         html!("p", {
             .text("Read ")
             .child(code("packages/frontend/src/main_thread.rs"))
