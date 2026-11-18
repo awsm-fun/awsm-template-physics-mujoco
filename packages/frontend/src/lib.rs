@@ -25,6 +25,7 @@
 //! meshgen primitives, and poses are plain `set_local` calls — the same "pose
 //! sink" shape any external sim integration reduces to.
 
+pub mod about;
 pub mod bootstrap;
 pub mod main_thread;
 pub mod protocol;

@@ -31,6 +31,7 @@ use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 use web_sys::{HtmlCanvasElement, MessageEvent, Worker, WorkerOptions, WorkerType};
 
+use crate::about::{About, Tab};
 use crate::bootstrap::spawn_shared_worker_transfer;
 use crate::protocol::{CameraMsg, Layout, OrbitState, ProfileMsg, RenderMsg, Scene};
 use crate::stats::{SimReport, Stats};
@@ -68,14 +69,22 @@ pub fn start() -> Result<(), JsValue> {
 
 fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsValue> {
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
-    // Take keyboard focus (the Settings modal closes on Escape). The page is
+    // Take keyboard focus (the modals close on Escape). The page is
     // usually embedded in an iframe on awsm.fun; a click on the canvas focuses
     // it too, since no pointer handler here cancels the press.
     let _ = window.focus();
     maybe_reset_settings(&window);
 
-    // The Stats chip + panel (see `crate::stats`), fed by both workers.
-    let stats = Stats::install(&window, STORAGE_PREFIX);
+    // The Stats chip + panel (see `crate::stats`), fed by both workers. Its
+    // `what do these mean?` opens About on the Stats tab. Mounted between the
+    // Stats and Settings buttons so the Tab order runs left to right.
+    let about = About::new();
+    let stats = Stats::install(
+        &window,
+        STORAGE_PREFIX,
+        clone!(about => move || about.open(Tab::Stats)),
+    );
+    about.install();
 
     // Backing store at the chosen render resolution (a stored Settings choice,
     // else native capped at a pixel budget — see `resolution`). Must be sized

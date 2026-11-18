@@ -2,6 +2,7 @@
 <html>
 <head>
     <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>physics-mujoco — Awsm · MuJoCo · wasm threads</title>
 
     <!-- COOP/COEP shim for static hosts (GitHub Pages) that can't send the
@@ -16,13 +17,17 @@
         /* The DOM (canvas + HUD) is built from Rust with Dominator — see
            src/main_thread.rs. These classes are the styling hooks it uses. */
         .canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
-        .hud { position: fixed; top: 10px; left: 12px; font-size: 13px; line-height: 1.5; white-space: pre; opacity: 0.85; pointer-events: none; }
+        .hud { position: fixed; top: 10px; left: 12px; right: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; opacity: 0.85; pointer-events: none; }
         .hud .key { color: #7fd1ff; }
         /* Stats panel (top right), driven from src/stats.rs. Hidden by
            default; the bottom-left Stats chip toggles it. One group per
            thread: a header button (name left, headline right) that toggles
            the rows under it. */
         .stats { position: fixed; top: 10px; right: 12px; min-width: 330px; max-height: calc(100vh - 80px); overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; white-space: pre; color: #9fb4d8; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 8px; padding: 6px 8px; backdrop-filter: blur(4px); }
+        /* "what do these mean?": opens About on its Stats tab. */
+        .stats-help { display: block; margin: 0 0 2px auto; padding: 0 4px; border: 0; border-radius: 4px; background: none; color: #7fd1ff; font: inherit; font-size: 11px; cursor: pointer; }
+        .stats-help:hover { text-decoration: underline; }
+        .stats-help:focus-visible { outline: 1px solid #7fd1ff; }
         .stats-group, .stats-row { display: flex; justify-content: space-between; gap: 24px; }
         .stats-group { width: 100%; padding: 0 4px; border: 0; border-radius: 4px; background: none; color: #cfe0fb; font: inherit; text-align: left; cursor: pointer; }
         .stats-group:hover { background: rgba(127, 209, 255, 0.1); }
@@ -57,20 +62,39 @@
         .notice-ok { display: block; margin: 0 auto; font: inherit; font-size: 13px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(20, 30, 48, 0.75); border: 1px solid rgba(127, 209, 255, 0.45); border-radius: 999px; padding: 7px 28px; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
         .notice-ok:hover { background: rgba(30, 44, 68, 0.9); border-color: #7fd1ff; }
 
-        /* ── About button + modal ─────────────────────────────────────────── */
-        .about-btn { position: fixed; bottom: 18px; left: 50%; transform: translateX(-50%); font: inherit; font-size: 13px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 22px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
+        /* ── About button (bottom centre) + modal, src/about.rs ──────────────
+           Two tabs: About, and Stats (what the Stats panel's numbers mean).
+           The header (title, GitHub link) and the tabs stay put; only the
+           selected panel scrolls. */
+        .about-btn { position: fixed; bottom: 18px; left: 50%; z-index: 5; transform: translateX(-50%); font: inherit; font-size: 13px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 22px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
         .about-btn:hover { background: rgba(20, 30, 48, 0.75); border-color: rgba(127, 209, 255, 0.45); }
         .about-overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(4, 6, 10, 0.6); backdrop-filter: blur(3px); }
-        .about-modal { position: relative; max-width: 480px; margin: 20px; padding: 24px 28px; color: #cfe0f5; font-size: 14px; line-height: 1.65; background: rgba(13, 18, 28, 0.96); border: 1px solid rgba(127, 209, 255, 0.22); border-radius: 12px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5); }
-        .about-modal h2 { margin: 0 0 14px; font-size: 17px; letter-spacing: 0.05em; color: #e8edf7; text-align: center; }
+        .about-modal { position: relative; display: flex; flex-direction: column; box-sizing: border-box; width: min(560px, calc(100vw - 24px)); max-height: calc(100vh - 24px); max-height: calc(100dvh - 24px); padding: 20px 24px 0; color: #cfe0f5; font-size: 14px; line-height: 1.6; background: rgba(13, 18, 28, 0.96); border: 1px solid rgba(127, 209, 255, 0.22); border-radius: 12px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5); }
+        .about-header { margin: 0 28px 12px 0; /* clear of the close button */ }
+        .about-modal h2 { margin: 0 0 2px; font-size: 17px; letter-spacing: 0.05em; color: #e8edf7; }
+        .about-github { font-size: 13px; }
+        .about-tabs { display: flex; gap: 4px; border-bottom: 1px solid rgba(127, 209, 255, 0.22); }
+        .about-tab { padding: 6px 16px; font: inherit; color: #9fb4d8; background: none; border: 1px solid transparent; border-bottom: none; border-radius: 8px 8px 0 0; cursor: pointer; }
+        .about-tab:hover { color: #e8edf7; }
+        .about-tab[aria-selected="true"] { color: #e8edf7; background: rgba(127, 209, 255, 0.1); border-color: rgba(127, 209, 255, 0.22); }
+        .about-tab:focus-visible, .about-panel:focus-visible { outline: 2px solid #7fd1ff; outline-offset: -2px; }
+        .about-panel { overflow-y: auto; scrollbar-color: rgba(127, 209, 255, 0.35) transparent; margin: 0 -24px; padding: 14px 24px 20px; }
         .about-modal p { margin: 0 0 12px; }
-        .about-modal ul { margin: 0 0 12px; padding-left: 20px; }
-        .about-modal li { margin: 3px 0; }
+        .about-modal h3 { margin: 16px 0 6px; font-size: 13px; letter-spacing: 0.05em; color: #e8edf7; }
         .about-modal a { color: #7fd1ff; text-decoration: none; border-bottom: 1px solid rgba(127, 209, 255, 0.35); }
         .about-modal a:hover { border-bottom-color: #7fd1ff; }
-        .about-repo { margin-top: 16px; font-size: 15px; }
-        .about-footer { margin: 14px 0 0; font-size: 12.5px; color: #8fa3c4; text-align: center; }
-        .about-footer::before { content: ""; display: block; margin: 0 auto 12px; width: 60px; border-top: 1px solid rgba(127, 209, 255, 0.18); }
+        .about-modal code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: #e8edf7; }
+        /* Control → what it does. */
+        .about-keys { width: 100%; margin: 0 0 12px; border-collapse: collapse; }
+        .about-keys th, .about-keys td { padding: 3px 0; text-align: left; vertical-align: top; }
+        .about-keys th { width: 42%; padding-right: 12px; font-weight: 600; color: #e8edf7; }
+        /* a URL option stays in one piece when a row of them wraps */
+        .about-keys code { white-space: nowrap; }
+        /* The Stats tab: a term from the panel, then what it means. */
+        .about-modal dl { margin: 0 0 12px; }
+        .about-modal dt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: #e8edf7; }
+        .about-modal dd { margin: 0 0 8px 14px; }
+        .about-more { color: #9fb4d8; }
         .about-close { position: absolute; top: 10px; right: 12px; font-size: 20px; line-height: 1; color: #9fb4d8; background: none; border: none; cursor: pointer; padding: 4px 8px; }
         .about-close:hover { color: #e8edf7; }
 
