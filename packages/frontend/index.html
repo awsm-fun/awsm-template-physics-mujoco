@@ -23,22 +23,53 @@
            default; the bottom-left Stats chip toggles it. One group per
            thread: a header button (name left, headline right) that toggles
            the rows under it. */
-        .stats { position: fixed; top: 10px; right: 12px; min-width: 330px; max-height: calc(100vh - 80px); overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; line-height: 1.55; white-space: pre; color: #9fb4d8; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 8px; padding: 6px 8px; backdrop-filter: blur(4px); }
+        /* The colours of the stats panel and of its explanation in About. A
+           lane is the GPU or a thread; each has one colour wherever it
+           appears: gpu orange, renderer blue, sim green, page grey. */
+        :root { --lane-gpu: #ffb469; --lane-renderer: #7fb7ff; --lane-sim: #7ddc9a; --lane-page: #aab4c5; --stats-num: #f1f6ff; --stats-text: #c9d7ee; --stats-dim: #9fb0cc; --stats-accent: #7fd1ff; --stats-warn: #ffc24d; --stats-bad: #ff6a5e; --stats-line: rgba(127, 209, 255, 0.16); }
+        [data-lane="gpu"] { --lane: var(--lane-gpu); }
+        [data-lane="renderer"] { --lane: var(--lane-renderer); }
+        [data-lane="sim"] { --lane: var(--lane-sim); }
+        [data-lane="page"] { --lane: var(--lane-page); }
+        .stats { position: fixed; top: 10px; right: 12px; box-sizing: border-box; min-width: 330px; max-width: calc(100vw - 24px); max-height: calc(100vh - 80px); overflow-y: auto; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; font-variant-numeric: tabular-nums; line-height: 1.6; white-space: pre; color: var(--stats-text); background: rgba(10, 14, 22, 0.86); /* opaque enough to read over a bright floor */ border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 8px; padding: 6px 8px; backdrop-filter: blur(8px); scrollbar-color: rgba(127, 209, 255, 0.35) transparent; }
         /* "what do these mean?": opens About on its Stats tab. */
-        .stats-help { display: block; margin: 0 0 2px auto; padding: 0 4px; border: 0; border-radius: 4px; background: none; color: #7fd1ff; font: inherit; font-size: 11px; cursor: pointer; }
+        .stats-help { display: block; margin: 0 0 2px auto; padding: 0 4px; border: 0; border-radius: 4px; background: none; color: var(--stats-accent); font: inherit; font-size: 11px; cursor: pointer; }
         .stats-help:hover { text-decoration: underline; }
-        .stats-help:focus-visible { outline: 1px solid #7fd1ff; }
-        .stats-group, .stats-row { display: flex; justify-content: space-between; gap: 24px; }
-        .stats-group { width: 100%; padding: 0 4px; border: 0; border-radius: 4px; background: none; color: #cfe0fb; font: inherit; text-align: left; cursor: pointer; }
-        .stats-group:hover { background: rgba(127, 209, 255, 0.1); }
-        .stats-group:focus-visible { outline: 1px solid #7fd1ff; }
-        /* A group's rows; a nested row breaks down the row above it. */
-        .stats-row { padding: 0 4px 0 calc(4px + 2ch); }
-        .stats-row.stats-nested { padding-left: calc(4px + 4ch); color: #7f93b5; }
-        .stats-row.stats-nested-2 { padding-left: calc(4px + 6ch); color: #7f93b5; }
+        .stats-help:focus-visible { outline: 1px solid var(--stats-accent); }
+        /* Where a name and its value do not fit on one line (a phone), the
+           value goes to the next line, at the right edge. */
+        .stats-group, .stats-row { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 12px; }
+        /* white-space: normal keeps the space between a header's name and its
+           value (there for screen readers) from becoming a line of its own
+           when the two wrap. */
+        .stats-group { width: 100%; padding: 1px 4px; border: 0; background: none; color: var(--stats-num); font: inherit; font-weight: 600; text-align: left; white-space: normal; cursor: pointer; }
+        /* A faint line between one group and the next. */
+        .stats-rows + .stats-group { margin-top: 2px; border-top: 1px solid var(--stats-line); padding-top: 3px; }
+        .stats-group:hover, .stats-row:hover { background-color: rgba(127, 209, 255, 0.1); }
+        .stats-group:focus-visible { outline: 1px solid var(--stats-accent); outline-offset: -1px; }
+        /* A name on the left, its value at the right edge. */
+        .stats-name, .stats-value { flex: none; white-space: pre; }
+        .stats-value { margin-left: auto; text-align: right; }
+        .stats-num { color: var(--stats-num); }
+        .stats-unit { font-size: 11px; color: var(--stats-dim); }
+        /* A lane's colour, on its group header and on its row of the frame
+           budget. */
+        .stats-dot { display: inline-block; width: 7px; height: 7px; margin-right: 6px; border-radius: 50%; background: var(--lane); }
+        /* A lane's share of the frame budget, in front of its value. */
+        .stats-bar { display: inline-block; width: 40px; height: 4px; margin-right: 10px; vertical-align: middle; overflow: hidden; border-radius: 2px; background: rgba(255, 255, 255, 0.14); }
+        .stats-bar > span { display: block; height: 100%; background: var(--stats-dim); }
+        .stats-bar.stats-warn > span { background: var(--stats-warn); }
+        .stats-bar.stats-over > span { background: var(--stats-bad); }
+        /* A group's rows, shown while it is expanded. Each level of a
+           breakdown is indented under a thin guide line and a little dimmer
+           than the one above. */
+        .stats-row { --guide: linear-gradient(var(--stats-line), var(--stats-line)); padding: 0 4px 0 calc(4px + 2ch); background-image: var(--guide); background-repeat: no-repeat; background-size: 1px 100%; background-position: calc(4px + 0.5ch) 0; }
+        .stats-row.stats-nested { padding-left: calc(4px + 4ch); background-image: var(--guide), var(--guide); background-position: calc(4px + 0.5ch) 0, calc(4px + 2.5ch) 0; color: #b3c2dc; }
+        /* A breakdown of a breakdown. */
+        .stats-row.stats-nested-2 { padding-left: calc(4px + 6ch); background-image: var(--guide), var(--guide), var(--guide); background-position: calc(4px + 0.5ch) 0, calc(4px + 2.5ch) 0, calc(4px + 4.5ch) 0; color: var(--stats-dim); }
         /* The sim keeps arriving late, or a lane is over the frame budget
            (see src/stats.rs for exactly when). */
-        .stats .stats-bad { color: #ff6a5e; font-weight: 700; }
+        .stats .stats-bad, .stats .stats-bad .stats-num, .stats .stats-bad .stats-unit { color: var(--stats-bad); font-weight: 700; }
         .stats-btn { position: fixed; bottom: 18px; left: 16px; z-index: 5; font: inherit; font-size: 12px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 18px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
         .stats-btn:hover { background: rgba(20, 30, 48, 0.75); border-color: rgba(127, 209, 255, 0.45); }
         .stats-btn.active { background: rgba(20, 30, 48, 0.85); border-color: rgba(127, 209, 255, 0.6); color: #e8edf7; }
@@ -84,16 +115,29 @@
         .about-modal a { color: #7fd1ff; text-decoration: none; border-bottom: 1px solid rgba(127, 209, 255, 0.35); }
         .about-modal a:hover { border-bottom-color: #7fd1ff; }
         .about-modal code { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: #e8edf7; }
-        /* Control → what it does. */
+        /* Control → what it does: the same look as a term and its
+           description below. */
         .about-keys { width: 100%; margin: 0 0 12px; border-collapse: collapse; }
-        .about-keys th, .about-keys td { padding: 3px 0; text-align: left; vertical-align: top; }
-        .about-keys th { width: 42%; padding-right: 12px; font-weight: 600; color: #e8edf7; }
+        .about-keys th, .about-keys td { padding: 4px 0; text-align: left; vertical-align: top; }
+        .about-keys th { width: 42%; padding-right: 16px; font-weight: 600; color: var(--stats-accent); }
+        .about-keys td, .about-modal dd { color: #b9c7de; }
         /* a URL option stays in one piece when a row of them wraps */
         .about-keys code { white-space: nowrap; }
-        /* The Stats tab: a term from the panel, then what it means. */
+        /* The Stats tab. Each section is a group of the panel: a divider, the
+           group's name with its lane's dot, then its terms. */
+        #about-panel-stats h3 { margin-top: 18px; border-top: 1px solid var(--stats-line); padding-top: 14px; }
+        .about-modal h3[data-lane]::before { content: ""; display: inline-block; width: 8px; height: 8px; margin-right: 8px; border-radius: 50%; background: var(--lane); }
+        /* A term from the panel, then what it means: side by side where there
+           is room, one under the other on a phone. */
         .about-modal dl { margin: 0 0 12px; }
-        .about-modal dt { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: #e8edf7; }
-        .about-modal dd { margin: 0 0 8px 14px; }
+        .about-modal dt { font-weight: 600; color: var(--stats-accent); }
+        .about-modal dd { margin: 2px 0 12px; }
+        @media (min-width: 560px) {
+            .about-modal dl { display: grid; grid-template-columns: minmax(0, 11.5em) minmax(0, 1fr); gap: 10px 18px; }
+            .about-modal dd { margin: 0; }
+        }
+        /* A unit as the panel prints it. */
+        .about-unit { display: inline-block; padding: 0 8px; border: 1px solid var(--stats-line); border-radius: 999px; background: rgba(127, 209, 255, 0.08); font-size: 12px; color: #e8edf7; white-space: nowrap; }
         .about-more { color: #9fb4d8; }
         .about-close { position: absolute; top: 10px; right: 12px; font-size: 20px; line-height: 1; color: #9fb4d8; background: none; border: none; cursor: pointer; padding: 4px 8px; }
         .about-close:hover { color: #e8edf7; }

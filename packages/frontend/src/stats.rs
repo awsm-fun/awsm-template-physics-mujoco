@@ -380,6 +380,8 @@ const SCOPE_GROUPS: [(CpuScopeKind, &str); 4] = [
     (CpuScopeKind::Submit, "submit"),
     (CpuScopeKind::Hook, "hooks"),
 ];
+/// A lane's share of the frame budget from which its bar warns.
+const SHARE_WARN: f64 = 0.8;
 
 /// The MuJoCo worker's report (`{kind: "stats"}`, about once a second).
 pub struct SimReport {
@@ -401,6 +403,16 @@ struct Row {
     /// renderer's scope subgroups under `render`, and their scopes).
     indent: u8,
     bad: bool,
+    /// A lane's row of the frame budget.
+    budget: Option<Budget>,
+}
+
+/// A lane's row of the frame budget: the lane's dot, and a bar for its share.
+#[derive(Clone, Copy)]
+struct Budget {
+    lane: &'static str,
+    /// Its time per frame over the budget.
+    share: f64,
 }
 
 impl Row {
@@ -410,6 +422,7 @@ impl Row {
             value,
             indent: 0,
             bad: false,
+            budget: None,
         }
     }
 
@@ -425,6 +438,9 @@ impl Row {
 struct Group {
     id: &'static str,
     label: &'static str,
+    /// The group's colour (`data-lane` in index.html): a dot on its header and
+    /// on its row of the frame budget, so that the two pair up.
+    lane: Option<&'static str>,
     open: Mutable<bool>,
     headline: Mutable<String>,
     bad: Mutable<bool>,
@@ -432,10 +448,17 @@ struct Group {
 }
 
 impl Group {
-    fn new(window: &web_sys::Window, prefix: &str, id: &'static str, label: &'static str) -> Self {
+    fn new(
+        window: &web_sys::Window,
+        prefix: &str,
+        id: &'static str,
+        label: &'static str,
+        lane: Option<&'static str>,
+    ) -> Self {
         Self {
             id,
             label,
+            lane,
             open: Mutable::new(stored_bool(window, &open_key(prefix, id)) == Some(true)),
             headline: Mutable::new(String::new()),
             bad: Mutable::new(false),
@@ -449,25 +472,35 @@ impl Group {
         self.rows.set(rows);
     }
 
-    fn dom(&self, prefix: &'static str) -> Dom {
+    /// The header, then the rows it shows while expanded.
+    fn dom(&self, prefix: &'static str) -> [Dom; 2] {
         let (id, label) = (self.id, self.label);
         let open = self.open.clone();
         let rows_id = format!("stats-rows-{id}");
-        html!("div", {
-            .child(html!("button", {
+        let headline = self
+            .headline
+            .signal_cloned()
+            .map(|v| value_spans(&v))
+            .to_signal_vec();
+        [
+            html!("button", {
                 .class("stats-group")
                 .attr("type", "button")
                 .attr("aria-controls", &rows_id)
                 .class_signal("stats-bad", self.bad.signal())
                 .attr_signal("aria-expanded", open.signal().map(|o| if o { "true" } else { "false" }))
                 .child(html!("span", {
-                    .text_signal(open.signal().map(move |o| {
-                        format!("{} {label}", if o { '▾' } else { '▸' })
+                    .class("stats-name")
+                    .child(html!("span", {
+                        .text_signal(open.signal().map(|o| if o { "▾ " } else { "▸ " }))
                     }))
+                    .children(self.lane.map(dot))
+                    .text(label)
                 }))
                 .text(" ") // for a screen reader; the layout ignores it
                 .child(html!("span", {
-                    .text_signal(self.headline.signal_cloned())
+                    .class("stats-value")
+                    .children_signal_vec(headline)
                 }))
                 .event(clone!(open => move |_: dominator::events::Click| {
                     let next = !open.get();
@@ -476,8 +509,8 @@ impl Group {
                         store_bool(&w, &open_key(prefix, id), next);
                     }
                 }))
-            }))
-            .child(html!("div", {
+            }),
+            html!("div", {
                 .class("stats-rows")
                 .attr("id", &rows_id)
                 .prop_signal("hidden", open.signal().map(|o| !o))
@@ -487,13 +520,105 @@ impl Group {
                         .apply_if(row.indent == 1, |d| d.class("stats-nested"))
                         .apply_if(row.indent == 2, |d| d.class("stats-nested-2"))
                         .apply_if(row.bad, |d| d.class("stats-bad"))
-                        .child(html!("span", { .text(&row.label) }))
-                        .child(html!("span", { .text(&row.value) }))
+                        .child(html!("span", {
+                            .class("stats-name")
+                            .children(row.budget.map(|b| dot(b.lane)))
+                            .text(&row.label)
+                        }))
+                        .child(html!("span", {
+                            .class("stats-value")
+                            .children(row.budget.map(|b| bar(b.share)))
+                            .children(value_spans(&row.value))
+                        }))
                     })
                 }))
-            }))
-        })
+            }),
+        ]
     }
+}
+
+/// A lane's dot.
+fn dot(lane: &str) -> Dom {
+    html!("span", {
+        .class("stats-dot")
+        .attr("data-lane", lane)
+    })
+}
+
+/// A lane's share of the frame budget as a bar; its colour says how close to
+/// the budget.
+fn bar(share: f64) -> Dom {
+    let (state, width) = bar_look(share);
+    html!("span", {
+        .class("stats-bar")
+        .apply(|d| match state {
+            Some(state) => d.class(state),
+            None => d,
+        })
+        .child(html!("span", {
+            .style("width", format!("{width}%"))
+        }))
+    })
+}
+
+/// A bar's state class (`stats-warn` from [`SHARE_WARN`], `stats-over` past
+/// the budget) and its fill in percent, capped at a full bar.
+fn bar_look(share: f64) -> (Option<&'static str>, f64) {
+    let state = if share > 1.0 {
+        Some("stats-over")
+    } else if share >= SHARE_WARN {
+        Some("stats-warn")
+    } else {
+        None
+    };
+    (state, share.min(1.0) * 100.0)
+}
+
+/// A value as it is shown: the numbers bright, the units and words around them
+/// smaller and dimmer.
+fn value_spans(text: &str) -> Vec<Dom> {
+    value_pieces(text)
+        .into_iter()
+        .map(|(num, piece)| {
+            html!("span", {
+                .class(if num { "stats-num" } else { "stats-unit" })
+                .text(piece)
+            })
+        })
+        .collect()
+}
+
+/// `text` split into numbers (`true`) and what is between them, by the other
+/// templates' rule `/<?\d[\d.]*%?/`: an optional `<`, a digit, digits and
+/// dots, an optional `%`.
+fn value_pieces(text: &str) -> Vec<(bool, &str)> {
+    let b = text.as_bytes();
+    let mut pieces = Vec::new();
+    let (mut start, mut i) = (0, 0);
+    while i < b.len() {
+        let digit = i + usize::from(b[i] == b'<');
+        if !b.get(digit).is_some_and(u8::is_ascii_digit) {
+            i += 1;
+            continue;
+        }
+        let mut end = digit + 1;
+        while b.get(end).is_some_and(|c| c.is_ascii_digit() || *c == b'.') {
+            end += 1;
+        }
+        if b.get(end) == Some(&b'%') {
+            end += 1;
+        }
+        // Every boundary is at an ASCII byte, so on a char boundary.
+        if start < i {
+            pieces.push((false, &text[start..i]));
+        }
+        pieces.push((true, &text[i..end]));
+        (start, i) = (end, end);
+    }
+    if start < b.len() {
+        pieces.push((false, &text[start..]));
+    }
+    pieces
 }
 
 /// `<prefix>stats_open_<id>`: whether a group is expanded.
@@ -568,7 +693,7 @@ impl Stats {
         prefix: &'static str,
         on_help: impl Fn() + 'static,
     ) -> Rc<Self> {
-        let group = |id, label| Group::new(window, prefix, id, label);
+        let group = |id, label, lane| Group::new(window, prefix, id, label, lane);
         let stats = Rc::new(Self {
             // Off by default: on a phone the panel covers a lot of the screen.
             // A stored "open" is honoured only on a desktop; on a touch device
@@ -577,12 +702,12 @@ impl Stats {
                 !coarse_pointer(window)
                     && stored_bool(window, &format!("{prefix}stats")) == Some(true),
             ),
-            budget: group("budget", "frame budget"),
-            display: group("display", "display"),
-            gpu: group("gpu", "GPU"),
-            renderer: group("renderer", "renderer (render worker)"),
-            sim: group("sim", "sim (MuJoCo, worker)"),
-            page: group("page", "page (main thread)"),
+            budget: group("budget", "frame budget", None),
+            display: group("display", "display", None),
+            gpu: group("gpu", "GPU", Some("gpu")),
+            renderer: group("renderer", "renderer (render worker)", Some("renderer")),
+            sim: group("sim", "sim (MuJoCo, worker)", Some("sim")),
+            page: group("page", "page (main thread)", Some("page")),
             state: RefCell::new(State {
                 placeholder: Some("starting…"),
                 ..State::default()
@@ -606,7 +731,7 @@ impl Stats {
                         .text("what do these mean?")
                         .event(move |_: dominator::events::Click| on_help())
                     }))
-                    .children(stats.groups().map(|g| g.dom(prefix)))
+                    .children(stats.groups().into_iter().flat_map(|g| g.dom(prefix)))
                 }))
                 .child(html!("button", {
                     .class("stats-btn")
@@ -873,14 +998,22 @@ impl Stats {
             .zip(st.fps_ema.filter(|f| *f > 0.0))
             .map(|(load, fps)| load * 1000.0 / fps);
         let lanes = [
-            (self.gpu.label, st.gpu_ema),
-            (self.renderer.label, st.cpu_ema),
-            (self.sim.label, sim),
-            (self.page.label, st.page_ema),
+            (&self.gpu, st.gpu_ema),
+            (&self.renderer, st.cpu_ema),
+            (&self.sim, sim),
+            (&self.page, st.page_ema),
         ];
         let mut rows: Vec<Row> = lanes
             .iter()
-            .filter_map(|(label, used)| used.map(|u| Row::new(*label, budget_share(u, budget))))
+            .filter_map(|(group, used)| {
+                used.map(|u| Row {
+                    budget: group.lane.map(|lane| Budget {
+                        lane,
+                        share: u / budget,
+                    }),
+                    ..Row::new(group.label, budget_share(u, budget))
+                })
+            })
             .collect();
         if let (Some(cpu), Some(gpu)) = (st.cpu_ema, st.gpu_ema) {
             rows.push(Row::new(
@@ -1172,6 +1305,67 @@ mod tests {
             budget_headline(budget, Some(17.9)),
             ("16.7 ms (60 Hz) · over by 1.2 ms".to_string(), true)
         );
+    }
+
+    #[test]
+    fn values_split_into_numbers_and_units() {
+        let split = |s| value_pieces(s);
+        assert_eq!(
+            split("16.7 ms (60 Hz) · headroom 9.6 ms"),
+            [
+                (true, "16.7"),
+                (false, " ms ("),
+                (true, "60"),
+                (false, " Hz) · headroom "),
+                (true, "9.6"),
+                (false, " ms"),
+            ]
+        );
+        assert_eq!(
+            split("<0.1 / 16.7 ms (<1%)"),
+            [
+                (true, "<0.1"),
+                (false, " / "),
+                (true, "16.7"),
+                (false, " ms ("),
+                (true, "<1%"),
+                (false, ")"),
+            ]
+        );
+        assert_eq!(
+            split("0 / s · 0 total"),
+            [
+                (true, "0"),
+                (false, " / s · "),
+                (true, "0"),
+                (false, " total")
+            ]
+        );
+        assert_eq!(
+            split("7.4 µs / frame"),
+            [(true, "7.4"), (false, " µs / frame")]
+        );
+        assert_eq!(
+            split("30 samples/s per robot"),
+            [(true, "30"), (false, " samples/s per robot")]
+        );
+        assert_eq!(split("n/a"), [(false, "n/a")]);
+        assert_eq!(split("—"), [(false, "—")]);
+        assert!(split("").is_empty());
+    }
+
+    #[test]
+    fn bars_warn_from_80_percent_and_turn_red_past_the_budget() {
+        let state = |share| bar_look(share).0;
+        assert_eq!(state(0.0), None);
+        assert_eq!(state(0.79), None);
+        assert_eq!(state(0.8), Some("stats-warn"));
+        assert_eq!(state(1.0), Some("stats-warn"));
+        assert_eq!(state(1.01), Some("stats-over"));
+        // The fill is the share, capped at a full bar.
+        assert_eq!(bar_look(0.5).1, 50.0);
+        assert_eq!(bar_look(1.0).1, 100.0);
+        assert_eq!(bar_look(2.5).1, 100.0);
     }
 
     #[test]
