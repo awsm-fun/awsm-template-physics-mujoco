@@ -143,7 +143,7 @@ and what it is per:
 | `frame budget` | the refresh period and the headroom left by the largest lane (`16.7 ms (60 Hz) · headroom 9.5 ms`, or `over by …` in red) | one row per lane, `used / budget ms (n%)`: `GPU`, `renderer (render worker)`, `sim (MuJoCo, worker)` (its time per step × steps per frame), `page (main thread)`; then `latency (renderer + GPU), reference only` |
 | `display` | refresh rate · fps | refresh rate (measured on the main thread, since no browser API reports it), frames presented, **missed frames** (refreshes that showed no new frame) |
 | `GPU` | GPU time per frame (timestamp queries; `n/a` without them) | one row per pass, slowest first; on GPUs that overlap passes (Apple's) they add up to more than the frame |
-| `renderer (render worker)` | the render worker's CPU time per frame | its four phases (`read app state + interpolate`, `set camera`, `update transforms`, `render (encode + submit)`); under render, awsm-renderer's own CPU scopes as `prepare` (uploads, bind groups, …), `passes` and `submit`, each scope slowest first (those under 1 µs folded into one row), then `outside the scopes` |
+| `renderer (render worker)` | the render worker's CPU time per frame | its five phases (`animations + particles`, `read app state + interpolate`, `set camera`, `update transforms`, `render (encode + submit)`); under render, awsm-renderer's own CPU scopes as `prepare` (uploads, bind groups, …), `passes` and `submit`, each scope slowest first (those under 1 µs folded into one row), then `outside the scopes` |
 | `sim (MuJoCo, worker)` | the MuJoCo worker's CPU time per step | steps/s, **late frames** (frames that found MuJoCo had not yet finished the state they were due to show, and held the newest one; see [Timing](#timing)), stepping (`mj_step`) vs publishing |
 | `page (main thread)` | the main thread's own work per frame | its two animation-frame loops: `camera frame loop`, `refresh probe` |
 
@@ -176,7 +176,7 @@ its own heap.
 | Thread | File | Does |
 |---|---|---|
 | **Main** | `packages/frontend/src/main_thread.rs` | Owns the DOM (Dominator), spawns both workers, brokers the one-time startup handshake, owns the orbit camera's state and posts it once per frame. The Stats panel is `packages/frontend/src/stats.rs`. |
-| **Render** | `packages/frontend/src/render_thread.rs` | Hosts `awsm-renderer` on an `OffscreenCanvas`, loads the editor-exported player bundle, ticks the sim at the start of every frame, draws the sim's poses blended at the display time, draws the debug overlays. |
+| **Render** | `packages/frontend/src/render_thread.rs` | Hosts `awsm-renderer` on an `OffscreenCanvas`, loads the editor-exported player bundle, ticks the sim at the start of every frame, advances the scene's clips, texture flows and particles (`update_animations`, `ParticleDriver`), then draws the sim's poses blended at the display time (after the clips, so the sim wins) and the debug overlays. |
 | **MuJoCo worker** | `web/workers/mujoco-worker.js` | Hosts the official `@mujoco/mujoco` Emscripten module, steps the sim at its fixed timestep as the render tick pays for (or on its own clock when no renderer is ticking), publishes timestamped geom + body world poses (and contact/joint/inertia debug frames) into a `SharedArrayBuffer` pose block. |
 
 Main + render share one `WebAssembly.Memory` — the threaded build profile
@@ -241,7 +241,10 @@ two threads' callbacks interleave, with one frame of latency.
 
 1. Run the exporter on your MJCF, import the sidecar into the
    [scene editor](https://scene.awsm.fun), light and dress the scene, and
-   export a player bundle.
+   export a player bundle. The rest of the scene plays as authored: clips,
+   texture flows and particles run, and the sim's poses override any clip on
+   its geoms. Anti-aliasing is the template's (`ANTI_ALIASING` in
+   `packages/frontend/src/render_thread.rs`), not the bundle's.
 2. Drop the pieces into `media/` — the model XML under `media/mujoco/`, the
    bundle as `media/bundle/` (`scene.toml` + `assets/`). That layout is
    exactly what gets served: the `copy-dir` links in

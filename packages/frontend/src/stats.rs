@@ -91,16 +91,20 @@ const GAP_MS: f64 = 250.0;
 /// The frame function's phases, in the order they run.
 #[derive(Clone, Copy)]
 pub enum Phase {
-    /// Everything up to the transforms being written: ticking the sim,
-    /// reading and blending its pose slots, the debug overlays.
+    /// Ticking the sim, then the scene's authored clips, texture UV flows and
+    /// particles (`update_animations`, `ParticleDriver::tick`).
+    Animate,
+    /// Reading and blending the sim's pose slots, the debug overlays: written
+    /// after `Animate`, so the sim wins on its nodes.
     Read,
     Camera,
     Transforms,
     /// `AwsmRenderer::render`: encoding every pass and submitting.
     Render,
 }
-pub const PHASES: usize = 4;
+pub const PHASES: usize = 5;
 const PHASE_NAMES: [&str; PHASES] = [
+    "animations + particles",
     "read app state + interpolate",
     "set camera",
     "update transforms",

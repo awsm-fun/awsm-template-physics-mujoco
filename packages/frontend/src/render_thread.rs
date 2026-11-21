@@ -49,6 +49,18 @@ const CAMERA_FOV_Y_DEG: f32 = 55.0;
 const CAMERA_NEAR: f32 = 0.1;
 const CAMERA_FAR: f32 = 400.0;
 
+/// This template's anti-aliasing: 4× MSAA, no SMAA. The renderer is built
+/// with it AND it is written into the scene before the load, because
+/// `load_scene_for_player` applies the scene's authored setting
+/// (`post_process.anti_aliasing`): with the two agreeing, the loader keeps the
+/// renderer's and nothing compiles twice. To use what the bundle authored
+/// instead, drop the write in [`run`].
+const ANTI_ALIASING: awsm_renderer_scene::AntiAliasingConfig =
+    awsm_renderer_scene::AntiAliasingConfig {
+        msaa: true,
+        smaa: false,
+    };
+
 /// The orbit camera as drawn: a fixed target, and the [`OrbitState`] main
 /// owns. Main posts its state once per main-thread frame; this keeps the last
 /// few and each frame draws the newest one at least half a frame old (see
@@ -250,8 +262,8 @@ async fn run(
 
     let mut renderer = AwsmRendererBuilder::new(gpu_builder)
         .with_anti_aliasing(awsm_renderer::anti_alias::AntiAliasing {
-            msaa_sample_count: Some(4),
-            smaa: false,
+            msaa_sample_count: ANTI_ALIASING.msaa.then_some(4),
+            smaa: ANTI_ALIASING.smaa,
             mipmap: true,
         })
         // GPU frame timing for the Stats panel's GPU group: timestamp queries
@@ -283,7 +295,10 @@ async fn run(
         futures::join!(renderer.ensure_config_pipelines(), fetch_scene(&scene_url));
     let compiled =
         compiled.map_err(|e| JsValue::from_str(&format!("ensure_config_pipelines: {e}")))?;
-    let scene = scene.map_err(|e| JsValue::from_str(&format!("load scene {scene_url}: {e}")))?;
+    let mut scene =
+        scene.map_err(|e| JsValue::from_str(&format!("load scene {scene_url}: {e}")))?;
+    // The loader applies the scene's anti-aliasing; make it this template's.
+    scene.post_process.anti_aliasing = ANTI_ALIASING;
     post_progress(&format!(
         "core pipelines ready ({compiled}) · scene parsed ({} nodes)",
         scene.nodes.len()
@@ -305,6 +320,10 @@ async fn run(
     )
     .await
     .map_err(|e| JsValue::from_str(&format!("load_scene_for_player: {e}")))?;
+
+    // The loader builds the scene's particle emitters; the host ticks them
+    // (as it does clips). Built before `loaded.mujoco` is moved out below.
+    let mut particles = awsm_renderer_scene_loader::ParticleDriver::new(&loaded);
 
     // The robot is authored content: the loader already resolved its
     // geom_id→transform binding out of the bundle. Nothing is built here.
@@ -371,7 +390,7 @@ async fn run(
     let raf_run = raf.clone();
     let mut frame_count: u32 = 0;
     // Presented frames and their timing, for the page's Stats panel.
-    // In 0.43 `gpu_timestamps` exists only once the GPU tier is on; the
+    // Since 0.43 `gpu_timestamps` exists only once the GPU tier is on; the
     // builder sets `gpu: Frame`, so here it is `Some` exactly when the device
     // has timestamp queries.
     let mut frame_window = crate::stats::FrameWindow::new(cell.borrow().gpu_timestamps.is_some());
@@ -386,11 +405,13 @@ async fn run(
     *raf_init.borrow_mut() = Some(Closure::new(move |vsync_ms: f64| {
         let frame_start = crate::stats::worker_now();
         let now_abs_ms = time_origin + vsync_ms;
-        if let Some(prev) = prev_vsync.replace(vsync_ms) {
-            let dt = vsync_ms - prev;
-            if dt > 2.0 && dt < 100.0 {
-                period_ms += (dt - period_ms) * 0.1;
-            }
+        // This frame's real time step (0 on the first frame): it advances the
+        // scene's clips and particles, and feeds the period estimate.
+        let frame_dt_ms = prev_vsync
+            .replace(vsync_ms)
+            .map_or(0.0, |prev| (vsync_ms - prev).max(0.0));
+        if frame_dt_ms > 2.0 && frame_dt_ms < 100.0 {
+            period_ms += (frame_dt_ms - period_ms) * 0.1;
         }
         let mut r = cell.borrow_mut();
 
@@ -407,13 +428,28 @@ async fn run(
             r.logging.cpu = tier;
         }
 
-        // Tell the sim this frame has started, then draw the sim at the time
-        // fixed by the previous frame (see `protocol`, "Timing").
+        // Tell the sim this frame has started, first, so it steps while the
+        // rest of the frame runs (see `protocol`, "Timing").
+        let mut sim = mirror.borrow_mut();
+        let display_us = sim
+            .as_mut()
+            .map(|m| m.begin_frame(abs_ms_to_us(now_abs_ms)));
+
+        // The scene's own motion: authored clips, texture UV flows and
+        // particle emitters, by this frame's real time step.
+        if let Err(err) = r.update_animations(frame_dt_ms) {
+            tracing::warn!("render thread: update_animations: {err}");
+        }
+        particles.tick(&mut r, (frame_dt_ms / 1000.0) as f32);
+        lap(&mut phases, Phase::Animate);
+
+        // Then the sim's poses, at the time fixed by the previous frame. They
+        // are written after the clips, so the sim wins on the nodes it drives.
         let mut late = false;
-        if let Some(m) = mirror.borrow_mut().as_mut() {
-            let display_us = m.begin_frame(abs_ms_to_us(now_abs_ms));
+        if let (Some(m), Some(display_us)) = (sim.as_mut(), display_us) {
             late = apply_poses(&mut r, m, display_us);
         }
+        drop(sim);
         lap(&mut phases, Phase::Read);
 
         let mut cam = camera.borrow_mut();

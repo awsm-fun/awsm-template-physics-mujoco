@@ -104,9 +104,9 @@ checksum = "f2032f911046de80f0a198e0901378627c33f59ea0ac00e363d481118bd70a53"
 
 [[package]]
 name = "awsm-renderer"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83d46e34713e3235cfbf43c3862249d6a58df5444076e9472ff145a4e6f998eb"
+checksum = "b12a66b4575272ceb9bec7e75ebf860d74e74e61b2ce38d07d4c6e01e466a52d"
 dependencies = [
  "anyhow",
  "askama",
@@ -132,9 +132,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-codec-basis"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c40463e341d586f48118820a39f3a753e3edd10e31b2a1a7e2f4b8abe5021de5"
+checksum = "f3c46ad39813f1af26415f4c21a4843ed71ce7120ad5177342721ea66f55ef84"
 dependencies = [
  "futures",
  "js-sys",
@@ -147,9 +147,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-codec-meshopt"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18eae379908d6cab8352a78b7a5a30dae8f8309b816743c1f65a816aad43ae6c"
+checksum = "da3e175a9160cb918af206e63496df6a5fe93016f2e17126f484ea1491c5d68b"
 dependencies = [
  "meshopt",
  "thiserror 2.0.19",
@@ -157,9 +157,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-core"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "72be92a1264d795a8ca111418a57d12de5b2a31eb54d60c81f885f8ecf2580d4"
+checksum = "b181d4c7ef538504711be0f2cbb75b25ee8d975837fa0bf169dfa53072296235"
 dependencies = [
  "anyhow",
  "bcdec_rs",
@@ -180,27 +180,27 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-curves"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de6b8b70867bc2b3f73b15216215d564403a1d1117d13559be33fa1cbb43f377"
+checksum = "d3b7478a4c0a8c6b6ccc9ca065fed3be15937d8109975d849629f47fa9266317"
 dependencies = [
  "glam 0.32.1",
 ]
 
 [[package]]
 name = "awsm-renderer-geometry"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29f3a3f8a6a4f1eddd274d3644f5b5ca28f1830c51f6d9974ae4d63c7421cff0"
+checksum = "2cc7bdebd366b548ddeaf00b61260faf65b9f3ee5b292d9071581016cddd175d"
 dependencies = [
  "glam 0.32.1",
 ]
 
 [[package]]
 name = "awsm-renderer-glb-export"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "514ce691d539d4fba47916d98f3adbc4c5f013e562c5eb044976273527f0098c"
+checksum = "f97568e295c1005ab7dff4cb65661993eca8bf19122641116f2705b7d44a47fc"
 dependencies = [
  "anyhow",
  "awsm-renderer-codec-meshopt",
@@ -214,9 +214,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-gltf"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "84fd1a0c7dd738e4873e4e60e173e991f39263ee18e3b5d915b27161efdd5406"
+checksum = "663f75c05ea66004214fc0af6f43cf64cf7494038c3cc6a06712470e209d4f41"
 dependencies = [
  "anyhow",
  "awsm-renderer",
@@ -245,9 +245,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-lod-bake"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9d4b65b0cea9b9b94767cd887bde43e15e6cd4c64351da90a85a4cd1d2ceb28"
+checksum = "4a6c15a9768fc346d14a29bd83f9eb1037b272dd5fcd399fcc3716b6267172bf"
 dependencies = [
  "glam 0.32.1",
  "serde",
@@ -255,9 +255,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-materials"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "256520943d6e0f20db93b12c76aa8c277e2628c952c4638341f52864bf75fa26"
+checksum = "f6191b4699d11bb9ff5a438c479863d5cc0e96b21c64a0ddf7143262dcfafc50"
 dependencies = [
  "awsm-renderer-core",
  "thiserror 2.0.19",
@@ -266,9 +266,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-meshgen"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b7505cc45249de4848e2d3837a624ecb82f6624ddf37ec7a8b89cb602eec348"
+checksum = "256abfb6c9ae745eb029fd65f57c1fd41df5826416496bf85b60b8e600b868e4"
 dependencies = [
  "awsm-renderer-scene",
  "glam 0.32.1",
@@ -276,18 +276,18 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-mujoco-format"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd749a73b5915e709c4d1c05e57076b1b2aa84e3edfa46bb65a767b7b04c13e5"
+checksum = "d98722658246288f5cfa282492038999aca2b3daf954a4de46bff44235e1784b"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "awsm-renderer-particles"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fd4dd10c6dd0382d125a14162d0ff061448cef41578ba90eea6457a811df20d7"
+checksum = "f78336e68d0111e1f02e0a20c2b8df4b707bf7d3f787ca8a5674f5312473249a"
 dependencies = [
  "awsm-renderer-curves",
  "awsm-renderer-geometry",
@@ -296,9 +296,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-scene"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8cd2e306c2ca2a030c6918689ac7babf392459f753ce110a3a08152389591942"
+checksum = "3a63a46572ee0b9fe35fd872f01891cc8e0a6c16eb2e247b18e373013ea2148e"
 dependencies = [
  "awsm-renderer-mujoco-format",
  "glam 0.32.1",
@@ -310,9 +310,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-scene-loader"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9c8c57c08d919be2f4e7009775b3729949b0c54aac11351e6b9097d95b6035b4"
+checksum = "a5dc15f8e0ab317c8dbaa81886b7f45209492f00e868515bc30485e6bf42301e"
 dependencies = [
  "anyhow",
  "awsm-renderer",
@@ -336,9 +336,9 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-tangents"
-version = "0.43.0"
+version = "0.44.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "644e9470950a4b352b3a0132c1eea11330166c91f3d99bceab998f299e1b2941"
+checksum = "5855d80647a67a1620ddc506944470c6250c3a9ec69cb584ad84a5bc39cdd808"
 dependencies = [
  "bevy_mikktspace",
 ]

@@ -35,10 +35,10 @@ publish = false
 #   awsm-renderer-meshgen      runtime primitive meshes (sphere/box/cylinder/…)
 #                              for mirroring MuJoCo geoms that have no bundle
 #                              asset.
-awsm-renderer = "0.43.0"
-awsm-renderer-scene = "0.43.0"
-awsm-renderer-scene-loader = { version = "0.43.0", features = ["http"] }
-awsm-renderer-meshgen = "0.43.0"
+awsm-renderer = "0.44.1"
+awsm-renderer-scene = "0.44.1"
+awsm-renderer-scene-loader = { version = "0.44.1", features = ["http"] }
+awsm-renderer-meshgen = "0.44.1"
 
 # ── DOM, driven from pure Rust ──────────────────────────────────────────────
 # NOTE: the published dominator 0.5.38 is incompatible with
