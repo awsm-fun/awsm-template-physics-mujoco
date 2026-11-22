@@ -35,10 +35,10 @@ publish = false
 #   awsm-renderer-meshgen      runtime primitive meshes (sphere/box/cylinder/…)
 #                              for mirroring MuJoCo geoms that have no bundle
 #                              asset.
-awsm-renderer = "0.44.1"
-awsm-renderer-scene = "0.44.1"
-awsm-renderer-scene-loader = { version = "0.44.1", features = ["http"] }
-awsm-renderer-meshgen = "0.44.1"
+awsm-renderer = "0.44.2"
+awsm-renderer-scene = "0.44.2"
+awsm-renderer-scene-loader = { version = "0.44.2", features = ["http"] }
+awsm-renderer-meshgen = "0.44.2"
 
 # ── DOM, driven from pure Rust ──────────────────────────────────────────────
 # NOTE: the published dominator 0.5.38 is incompatible with
@@ -48,18 +48,18 @@ futures = "0.3"
 futures-signals = "0.3"
 
 # ── glue ────────────────────────────────────────────────────────────────────
-# Pinned to one internally-consistent wasm-bindgen / web-sys / js-sys set (the
-# -sys crates `=`-pin their wasm-bindgen, so these four move together). It must
-# stay semver-compatible with the ranges the local awsm-renderer declares, and
-# match the wasm-bindgen-cli trunk drives. glam is kept at the renderer's 0.32:
-# glam types cross the renderer API boundary, so a mismatched major would fail
-# to type-check.
+# No exact pins: Cargo.lock records the versions, and trunk fetches the
+# wasm-bindgen CLI that matches it. `cargo update` moves wasm-bindgen / web-sys /
+# js-sys together. WebGPU in web-sys is unstable API, so if an update breaks
+# awsm-renderer-core, restore the lock and fix it in the renderer. glam is kept
+# at the renderer's 0.32: glam types cross the renderer API boundary, so a
+# mismatched major would fail to type-check.
 glam = "0.32"
 gloo-net = { version = "0.7", features = ["http"] }
-wasm-bindgen = "=0.2.126"
-wasm-bindgen-futures = "=0.4.76"
-js-sys = "=0.3.103"
-web-sys = "=0.3.103"
+wasm-bindgen = "0.2.130"
+wasm-bindgen-futures = "0.4.80"
+js-sys = "0.3.107"
+web-sys = "0.3.107"
 serde = { version = "1", features = ["derive"] }
 serde-wasm-bindgen = "0.6"
 toml = "1"
