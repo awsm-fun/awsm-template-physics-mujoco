@@ -37,7 +37,7 @@ use web_sys::js_sys;
 use web_sys::{HtmlCanvasElement, MessageEvent, Worker, WorkerOptions, WorkerType};
 
 use awsm_renderer_settings::{
-    probe_gpu, AaMode, SettingsConfig, SettingsHooks, SettingsOptions, SettingsPanel,
+    probe_gpu, AaDefaults, AaMode, SettingsConfig, SettingsHooks, SettingsOptions, SettingsPanel,
     SettingsStore, SettingsToWorker, SettingsUi,
 };
 use awsm_renderer_stats::{StatsCollector, StatsHooks, StatsPanel, StatsToPage, StatsToWorker};
@@ -80,11 +80,18 @@ pub fn start() -> Result<(), JsValue> {
     Ok(())
 }
 
-/// This app's Settings: every anti-aliasing mode, TAA by default on a desktop
-/// and Off on a touch device or a software GPU, and the shared resolution
-/// policy (awsm-renderer-settings).
+/// This app's Settings: every anti-aliasing mode, TAA by default on a
+/// desktop, MSAA 4× on a touch device (the fixed mode this template had
+/// before the menu), Off on a software GPU, and the shared resolution policy
+/// (awsm-renderer-settings).
 fn settings_config() -> SettingsConfig {
-    SettingsConfig::default()
+    SettingsConfig {
+        defaults: AaDefaults {
+            coarse: AaMode::Msaa,
+            ..AaDefaults::default()
+        },
+        ..SettingsConfig::default()
+    }
 }
 
 /// The Settings modal's words and look: this template's close button and

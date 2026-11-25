@@ -158,8 +158,8 @@ remembers its state.
 **Settings** (bottom right) holds the render resolution and the
 anti-aliasing: Off, SMAA, MSAA 4×, TAA, or TAA upscaling from 67%, 58% or 50%
 of the resolution (Quality, Balanced, Performance). TAA is the default on a
-desktop; a touch device or a software GPU starts with it off (and a lower
-resolution). `?aa=<mode>` (`off`, `smaa`, `msaa`, `taa`, `taa-quality`,
+desktop; a touch device starts with MSAA 4× (and a lower resolution), a
+software GPU with anti-aliasing off (and 50% resolution). `?aa=<mode>` (`off`, `smaa`, `msaa`, `taa`, `taa-quality`,
 `taa-balanced`, `taa-performance`) picks one for a single visit without
 storing it, and `?reset` forgets every stored setting. **About** (bottom
 centre) says what the demo is and, on its Stats tab, what every number in the
