@@ -145,7 +145,7 @@ and what it is per:
 | `GPU` | GPU time per frame (timestamp queries; `n/a` without them) | one row per pass, slowest first; on GPUs that overlap passes (Apple's) they add up to more than the frame |
 | `renderer (render worker)` | the render worker's CPU time per frame | its five phases (`animations + particles`, `read app state + interpolate`, `set camera`, `update transforms`, `render (encode + submit)`); under render, awsm-renderer's own CPU scopes as `prepare` (uploads, bind groups, …), `passes` and `submit`, each scope slowest first (those under 1 µs folded into one row), then `outside the scopes` |
 | `sim (MuJoCo, worker)` | the MuJoCo worker's CPU time per step | steps/s, **late frames** (frames that found MuJoCo had not yet finished the state they were due to show, and held the newest one; see [Timing](#timing)), stepping (`mj_step`) vs publishing |
-| `page (main thread)` | the main thread's own work per frame | its two animation-frame loops: `camera frame loop`, `refresh probe` |
+| `page (main thread)` | the main thread's own work per frame | `camera frame loop` |
 
 Click a group to expand it; each remembers its state. Expanding a group is
 what turns on its extra timing (the renderer's CPU scopes and phase clocks, the
@@ -154,11 +154,25 @@ panel, costs nothing; an expanded one is timed on every frame. CPU and GPU work
 run in parallel, so each must fit the budget on its own; they do not add up,
 except when the CPU waits on the GPU, which shows as missed frames. Late frames
 that keep happening turn the sim group red. The panel is off by default and
-remembers its state; `?reset` forgets every stored setting. **Settings**
-(bottom right) holds the render resolution. **About** (bottom centre) says
-what the demo is and, on its Stats tab, what every number in the panel means
-(the panel's `what do these mean?` opens it there). The panel is
-`packages/frontend/src/stats.rs`, the About modal `packages/frontend/src/about.rs`.
+remembers its state.
+**Settings** (bottom right) holds the render resolution and the
+anti-aliasing: Off, SMAA, MSAA 4×, TAA, or TAA upscaling from 67%, 58% or 50%
+of the resolution (Quality, Balanced, Performance). TAA is the default on a
+desktop; a touch device or a software GPU starts with it off (and a lower
+resolution). `?aa=<mode>` (`off`, `smaa`, `msaa`, `taa`, `taa-quality`,
+`taa-balanced`, `taa-performance`) picks one for a single visit without
+storing it, and `?reset` forgets every stored setting. **About** (bottom
+centre) says what the demo is and, on its Stats tab, what every number in the
+panel means (the panel's `what do these mean?` opens it there).
+
+Settings and Stats come from
+[awsm-renderer-kit](https://github.com/awsm-fun/awsm-renderer-kit), shared by
+every awsm-renderer template: its `SettingsPanel` and `StatsPanel` on the
+main thread, and its stats collector and anti-aliasing switch in the render
+worker. What is this app's own is in `packages/frontend/src/stats.rs` (the
+frame phases and the sim group) and `packages/frontend/src/main_thread.rs`
+(where the panels mount, and the words); the About modal is
+`packages/frontend/src/about.rs`.
 
 Other tasks: `task build` (production build into `dist/`), `task check`
 (threaded `cargo check`, no serve), `task lint` (clippy), `task fmt` (format),
@@ -175,7 +189,7 @@ its own heap.
 
 | Thread | File | Does |
 |---|---|---|
-| **Main** | `packages/frontend/src/main_thread.rs` | Owns the DOM (Dominator), spawns both workers, brokers the one-time startup handshake, owns the orbit camera's state and posts it once per frame. The Stats panel is `packages/frontend/src/stats.rs`. |
+| **Main** | `packages/frontend/src/main_thread.rs` | Owns the DOM (Dominator), spawns both workers, brokers the one-time startup handshake, owns the orbit camera's state and posts it once per frame. The Settings and Stats panels are awsm-renderer-kit's; the app's stats group is `packages/frontend/src/stats.rs`. |
 | **Render** | `packages/frontend/src/render_thread.rs` | Hosts `awsm-renderer` on an `OffscreenCanvas`, loads the editor-exported player bundle, ticks the sim at the start of every frame, advances the scene's clips, texture flows and particles (`update_animations`, `ParticleDriver`), then draws the sim's poses blended at the display time (after the clips, so the sim wins) and the debug overlays. |
 | **MuJoCo worker** | `web/workers/mujoco-worker.js` | Hosts the official `@mujoco/mujoco` Emscripten module, steps the sim at its fixed timestep as the render tick pays for (or on its own clock when no renderer is ticking), publishes timestamped geom + body world poses (and contact/joint/inertia debug frames) into a `SharedArrayBuffer` pose block. |
 
