@@ -245,8 +245,8 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-kit-web"
-version = "0.1.1"
-source = "git+https://github.com/awsm-fun/awsm-renderer-kit?tag=v0.1.1#56cf6ce570f334da5eca7d565c582591f4083638"
+version = "0.1.2"
+source = "git+https://github.com/awsm-fun/awsm-renderer-kit?tag=v0.1.2#e03874049622337d3f4464055ac3a61abc0cc6ca"
 dependencies = [
  "js-sys",
  "serde",
@@ -348,8 +348,8 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-settings"
-version = "0.1.1"
-source = "git+https://github.com/awsm-fun/awsm-renderer-kit?tag=v0.1.1#56cf6ce570f334da5eca7d565c582591f4083638"
+version = "0.1.2"
+source = "git+https://github.com/awsm-fun/awsm-renderer-kit?tag=v0.1.2#e03874049622337d3f4464055ac3a61abc0cc6ca"
 dependencies = [
  "awsm-renderer",
  "awsm-renderer-kit-web",
@@ -363,8 +363,8 @@ dependencies = [
 
 [[package]]
 name = "awsm-renderer-stats"
-version = "0.1.1"
-source = "git+https://github.com/awsm-fun/awsm-renderer-kit?tag=v0.1.1#56cf6ce570f334da5eca7d565c582591f4083638"
+version = "0.1.2"
+source = "git+https://github.com/awsm-fun/awsm-renderer-kit?tag=v0.1.2#e03874049622337d3f4464055ac3a61abc0cc6ca"
 dependencies = [
  "awsm-renderer",
  "awsm-renderer-kit-web",
