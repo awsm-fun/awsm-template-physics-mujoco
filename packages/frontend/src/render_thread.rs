@@ -59,6 +59,7 @@ const ANTI_ALIASING: awsm_renderer_scene::AntiAliasingConfig =
     awsm_renderer_scene::AntiAliasingConfig {
         msaa: true,
         smaa: false,
+        taa: None,
     };
 
 /// The orbit camera as drawn: a fixed target, and the [`OrbitState`] main
@@ -209,8 +210,8 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
             // across releases, so a browser that cached an older transcoder
             // (wasm included: the worker carries the query over to it) would
             // otherwise pair it with the new JS. Bump with awsm-renderer.
-            format!("{base}/workers/basis-worker.js?v=0.45.0"),
-            format!("{base}/vendor/basis/basis_transcoder.js?v=0.45.0"),
+            format!("{base}/workers/basis-worker.js?v=0.46.0"),
+            format!("{base}/vendor/basis/basis_transcoder.js?v=0.46.0"),
         ));
     }
     // Which bundle directory to load — main picked it from `?scene=` and passed
@@ -265,6 +266,7 @@ async fn run(
             msaa_sample_count: ANTI_ALIASING.msaa.then_some(4),
             smaa: ANTI_ALIASING.smaa,
             mipmap: true,
+            taa: None,
         })
         // GPU frame timing for the Stats panel's GPU group: timestamp queries
         // on every pass, folded into one whole-frame span (cheap; silently
