@@ -19,7 +19,8 @@
         .canvas { display: block; width: 100vw; height: 100vh; touch-action: none; }
         .hud { position: fixed; top: 10px; left: 12px; right: 12px; font-size: 13px; line-height: 1.5; white-space: pre-wrap; opacity: 0.85; pointer-events: none; }
         .hud .key { color: #7fd1ff; }
-        /* Stats panel (top right), driven from src/stats.rs. Hidden by
+        /* Stats panel (top right): awsm-renderer-stats' StatsPanel, its app
+           group in src/stats.rs. Hidden by
            default; the bottom-left Stats chip toggles it. One group per
            thread: a header button (name left, headline right) that toggles
            the rows under it. */
@@ -73,25 +74,6 @@
         .stats-btn { position: fixed; bottom: 18px; left: 16px; z-index: 5; font: inherit; font-size: 12px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 18px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
         .stats-btn:hover { background: rgba(20, 30, 48, 0.75); border-color: rgba(127, 209, 255, 0.45); }
         .stats-btn.active { background: rgba(20, 30, 48, 0.85); border-color: rgba(127, 209, 255, 0.6); color: #e8edf7; }
-
-        /* ── Settings button + modal (graphics controls, src/main_thread.rs) ─
-           Bottom-right pill opens a modal with the resolution slider (the
-           fill-rate lever) + MSAA / SMAA toggles. */
-        .settings-btn { position: fixed; bottom: 18px; right: 16px; z-index: 5; font: inherit; font-size: 12px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 18px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
-        .settings-btn:hover { background: rgba(20, 30, 48, 0.75); border-color: rgba(127, 209, 255, 0.45); }
-        .settings-overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(4, 6, 10, 0.6); backdrop-filter: blur(3px); }
-        .settings-modal { position: relative; width: min(360px, 86vw); margin: 20px; padding: 22px 26px; color: #cfe0f5; background: rgba(13, 18, 28, 0.96); border: 1px solid rgba(127, 209, 255, 0.22); border-radius: 12px; box-shadow: 0 18px 60px rgba(0, 0, 0, 0.5); }
-        .settings-modal h2 { margin: 0 0 16px; font-size: 16px; letter-spacing: 0.05em; color: #e8edf7; text-align: center; }
-        .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0; }
-        .settings-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: #b9c6dd; }
-        .settings-row .res-slider { width: 150px; accent-color: #7fd1ff; cursor: pointer; }
-        .settings-toggle { width: 18px; height: 18px; accent-color: #7fd1ff; cursor: pointer; }
-        .settings-hint { margin: 16px 0 0; font-size: 11.5px; line-height: 1.5; color: #8fa3c4; }
-        /* One-time reduced-quality notice (touch devices); shares the settings
-           modal chrome, plus its own body text + OK button. */
-        .notice-text { margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #b9c6dd; }
-        .notice-ok { display: block; margin: 0 auto; font: inherit; font-size: 13px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(20, 30, 48, 0.75); border: 1px solid rgba(127, 209, 255, 0.45); border-radius: 999px; padding: 7px 28px; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
-        .notice-ok:hover { background: rgba(30, 44, 68, 0.9); border-color: #7fd1ff; }
 
         /* ── About button (bottom centre) + modal, src/about.rs ──────────────
            Two tabs: About, and Stats (what the Stats panel's numbers mean).
@@ -156,8 +138,12 @@
         #loading-log { width: min(620px, 86vw); height: 200px; overflow: hidden; display: flex; flex-direction: column; justify-content: flex-end; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; line-height: 1.6; color: #7f8ba1; mask-image: linear-gradient(to bottom, transparent 0%, black 35%); }
         #loading-log div { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
         #loading-log div:last-child { color: #b9e3ff; }
-        /* ── Settings button + modal (src/resolution.rs) ─────────────────────
-           Bottom-right pill opens a modal with the render-resolution slider. */
+        /* ── Settings button + modal (awsm-renderer-settings' SettingsPanel,
+           mounted from src/main_thread.rs) ────────────────────────────────
+           Bottom-right pill opens a modal with the render-resolution slider
+           and the anti-aliasing menu. The same chrome serves the "compiling
+           pipelines" overlay an anti-aliasing change raises, and the
+           reduced-quality notice. */
         .settings-btn { position: fixed; bottom: 18px; right: 16px; z-index: 5; font: inherit; font-size: 12px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(10, 14, 22, 0.55); border: 1px solid rgba(127, 209, 255, 0.18); border-radius: 999px; padding: 7px 18px; cursor: pointer; backdrop-filter: blur(4px); transition: background 0.15s ease, border-color 0.15s ease; }
         .settings-btn:hover { background: rgba(20, 30, 48, 0.75); border-color: rgba(127, 209, 255, 0.45); }
         .settings-overlay { position: fixed; inset: 0; z-index: 20; display: flex; align-items: center; justify-content: center; background: rgba(4, 6, 10, 0.6); backdrop-filter: blur(3px); }
@@ -168,7 +154,12 @@
         .settings-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin: 12px 0; }
         .settings-label { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; color: #b9c6dd; }
         .settings-row .res-slider { width: 150px; accent-color: #7fd1ff; cursor: pointer; }
+        .settings-select { font: inherit; font-size: 12.5px; color: #e8edf7; background: rgba(20, 30, 48, 0.85); border: 1px solid rgba(127, 209, 255, 0.35); border-radius: 6px; padding: 4px 8px; cursor: pointer; accent-color: #7fd1ff; }
         .settings-hint { margin: 16px 0 0; font-size: 11.5px; line-height: 1.5; color: #8fa3c4; }
+        /* The overlays' body text, and the notice's OK button. */
+        .notice-text { margin: 0 0 18px; font-size: 13px; line-height: 1.6; color: #b9c6dd; }
+        .notice-ok { display: block; margin: 0 auto; font: inherit; font-size: 13px; letter-spacing: 0.06em; color: #cfe0f5; background: rgba(20, 30, 48, 0.75); border: 1px solid rgba(127, 209, 255, 0.45); border-radius: 999px; padding: 7px 28px; cursor: pointer; transition: background 0.15s ease, border-color 0.15s ease; }
+        .notice-ok:hover { background: rgba(30, 44, 68, 0.9); border-color: #7fd1ff; }
     </style>
 </head>
 <body>

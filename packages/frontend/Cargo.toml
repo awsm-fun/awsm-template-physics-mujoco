@@ -16,6 +16,8 @@ crate-type = ["cdylib", "rlib"]
 awsm-renderer.workspace = true
 awsm-renderer-scene.workspace = true
 awsm-renderer-scene-loader.workspace = true
+awsm-renderer-settings.workspace = true
+awsm-renderer-stats.workspace = true
 awsm-renderer-meshgen.workspace = true
 
 # ── DOM, driven from pure Rust ───────────────────────────────────────────────

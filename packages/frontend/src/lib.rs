@@ -30,7 +30,6 @@ pub mod bootstrap;
 pub mod main_thread;
 pub mod protocol;
 pub mod render_thread;
-pub mod resolution;
 pub mod stats;
 
 use wasm_bindgen::prelude::*;

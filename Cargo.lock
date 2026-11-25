@@ -244,6 +244,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "awsm-renderer-kit-web"
+version = "0.1.1"
+source = "git+https://github.com/awsm-fun/awsm-renderer-kit?tag=v0.1.1#56cf6ce570f334da5eca7d565c582591f4083638"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde-wasm-bindgen",
+ "wasm-bindgen",
+ "web-sys",
+]
+
+[[package]]
 name = "awsm-renderer-lod-bake"
 version = "0.46.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -332,6 +344,34 @@ dependencies = [
  "serde_json",
  "toml",
  "tracing",
+]
+
+[[package]]
+name = "awsm-renderer-settings"
+version = "0.1.1"
+source = "git+https://github.com/awsm-fun/awsm-renderer-kit?tag=v0.1.1#56cf6ce570f334da5eca7d565c582591f4083638"
+dependencies = [
+ "awsm-renderer",
+ "awsm-renderer-kit-web",
+ "awsm-renderer-scene",
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
+]
+
+[[package]]
+name = "awsm-renderer-stats"
+version = "0.1.1"
+source = "git+https://github.com/awsm-fun/awsm-renderer-kit?tag=v0.1.1#56cf6ce570f334da5eca7d565c582591f4083638"
+dependencies = [
+ "awsm-renderer",
+ "awsm-renderer-kit-web",
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]
@@ -1091,6 +1131,8 @@ dependencies = [
  "awsm-renderer-meshgen",
  "awsm-renderer-scene",
  "awsm-renderer-scene-loader",
+ "awsm-renderer-settings",
+ "awsm-renderer-stats",
  "dominator",
  "futures",
  "futures-signals",

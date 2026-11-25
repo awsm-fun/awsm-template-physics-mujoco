@@ -228,7 +228,7 @@ fn about_tab() -> Vec<Dom> {
             ))
             .child(key_row(
                 vec![html!("span", { .text("Stats, Settings") })],
-                "what each thread is doing; the render resolution",
+                "what each thread is doing; the render resolution and anti-aliasing",
             ))
         }),
         h3("How it works"),
@@ -334,7 +334,7 @@ fn stats_tab() -> Vec<Dom> {
                 "missed frames",
                 vec![text(
                     "Refreshes that went by without a new frame. A steady count is visible \
-                 stutter: lower the resolution in Settings.",
+                 stutter: lower the resolution or the anti-aliasing in Settings.",
                 )],
             ),
         ]),
@@ -415,10 +415,10 @@ fn stats_tab() -> Vec<Dom> {
         ]),
         lane_h3("page (main thread)", "page"),
         dl(vec![(
-            "camera frame loop, refresh probe",
+            "camera frame loop",
             vec![text(
-                "The page's own work per frame: sending the camera, and measuring the refresh \
-             rate. It should stay tiny; the heavy work is in the workers.",
+                "The page's own work per frame: sending the camera. It should stay tiny; the \
+             heavy work is in the workers.",
             )],
         )]),
     ]

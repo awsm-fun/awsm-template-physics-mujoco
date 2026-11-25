@@ -34,11 +34,20 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 
-use crate::protocol::{
-    abs_ms_to_us, header, time_diff_us, CameraMsg, Layout, OrbitState, Profile, ProfileMsg,
-    RenderMsg, ResizeMsg, CONTACT_STRIDE, JOINT_STRIDE, MAX_CONTACTS, POSE_SLOTS, POSE_STRIDE,
+use awsm_renderer::AwsmRenderer;
+use awsm_renderer_settings::{
+    apply_anti_aliasing, post_to_page, scene_anti_aliasing, AaMode, SettingsToPage,
+    SettingsToWorker,
 };
-use crate::stats::{lap, Phase};
+use awsm_renderer_stats::{
+    post_report, stats_logging, FrameInput, RendererTimings, StatsCollector, StatsToWorker,
+};
+
+use crate::protocol::{
+    abs_ms_to_us, header, time_diff_us, CameraMsg, Layout, OrbitState, RenderMsg, CONTACT_STRIDE,
+    JOINT_STRIDE, MAX_CONTACTS, POSE_SLOTS, POSE_STRIDE,
+};
+use crate::stats::{self, worker_now, Phase, SimReport, SimStats};
 
 /// The boxed RAF callback, self-referenced so the render loop can reschedule
 /// itself each frame (and stays alive for the worker's lifetime).
@@ -49,18 +58,16 @@ const CAMERA_FOV_Y_DEG: f32 = 55.0;
 const CAMERA_NEAR: f32 = 0.1;
 const CAMERA_FAR: f32 = 400.0;
 
-/// This template's anti-aliasing: 4× MSAA, no SMAA. The renderer is built
-/// with it AND it is written into the scene before the load, because
-/// `load_scene_for_player` applies the scene's authored setting
-/// (`post_process.anti_aliasing`): with the two agreeing, the loader keeps the
-/// renderer's and nothing compiles twice. To use what the bundle authored
-/// instead, drop the write in [`run`].
-const ANTI_ALIASING: awsm_renderer_scene::AntiAliasingConfig =
-    awsm_renderer_scene::AntiAliasingConfig {
-        msaa: true,
-        smaa: false,
-        taa: None,
-    };
+/// The awsm-renderer release the vendored Basis transcoder files came with.
+/// It is appended to their URLs as `?v=…`: those files keep their names from
+/// one release to the next, so after a deployed upgrade a browser could
+/// otherwise pair a cached old transcoder with the new worker script. Bump it
+/// together with the awsm-renderer version in Cargo.toml.
+const BASIS_VERSION: &str = "0.46.0";
+
+/// The renderer, shared by the frame loop and the message handler. `None`
+/// while an anti-aliasing change owns it across its awaits.
+type RendererCell = Rc<RefCell<Option<AwsmRenderer>>>;
 
 /// The orbit camera as drawn: a fixed target, and the [`OrbitState`] main
 /// owns. Main posts its state once per main-thread frame; this keeps the last
@@ -181,8 +188,9 @@ struct ContactOverlay {
     shown: usize,
 }
 
-/// Worker entry: unpack the transferred `OffscreenCanvas` + page origin, build
-/// the WebGPU device, and kick off the async load+render.
+/// Worker entry: unpack the transferred `OffscreenCanvas`, the page origin and
+/// the page's settings (`aa`, the anti-aliasing mode id), build the WebGPU
+/// device, and kick off the async load+render.
 pub fn start(payload: JsValue) -> Result<(), JsValue> {
     use awsm_renderer::core::renderer::{AwsmRendererWebGpuBuilder, DeviceRequestLimits};
     use awsm_renderer::web_global::navigator_gpu;
@@ -196,6 +204,13 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
         .ok()
         .and_then(|v| v.as_string())
         .unwrap_or_default();
+    // The mode the page's Settings chose: the renderer is built with it, so
+    // start-up compiles exactly the pipelines this session uses.
+    let aa = js_sys::Reflect::get(&payload, &JsValue::from_str("aa"))
+        .ok()
+        .and_then(|v| v.as_string())
+        .and_then(|id| AaMode::from_id(&id))
+        .unwrap_or(AaMode::Msaa);
     // Provide the Basis (KTX2/BasisU) codec URLs — the crate hardcodes none.
     // Must be ABSOLUTE (our base is `blob:`); `app_base` keeps the deploy PATH
     // so a subpath deploy resolves.
@@ -209,9 +224,9 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
             // `?v=` names the vendored build: these files keep their names
             // across releases, so a browser that cached an older transcoder
             // (wasm included: the worker carries the query over to it) would
-            // otherwise pair it with the new JS. Bump with awsm-renderer.
-            format!("{base}/workers/basis-worker.js?v=0.46.0"),
-            format!("{base}/vendor/basis/basis_transcoder.js?v=0.46.0"),
+            // otherwise pair it with the new JS. See `BASIS_VERSION`.
+            format!("{base}/workers/basis-worker.js?v={BASIS_VERSION}"),
+            format!("{base}/vendor/basis/basis_transcoder.js?v={BASIS_VERSION}"),
         ));
     }
     // Which bundle directory to load — main picked it from `?scene=` and passed
@@ -241,7 +256,7 @@ pub fn start(payload: JsValue) -> Result<(), JsValue> {
         .with_device_request_limits(DeviceRequestLimits::max_all());
 
     wasm_bindgen_futures::spawn_local(async move {
-        if let Err(err) = run(gpu_builder, canvas_handle, origin, bundle_dir, overlays).await {
+        if let Err(err) = run(gpu_builder, canvas_handle, origin, bundle_dir, overlays, aa).await {
             tracing::error!("render thread: {err:?}");
             post_to_main(&RenderMsg::Error {
                 message: format!("{err:?}"),
@@ -257,25 +272,18 @@ async fn run(
     origin: String,
     bundle_dir: String,
     overlays: OverlayToggles,
+    aa: AaMode,
 ) -> Result<(), JsValue> {
     use awsm_renderer::camera::CameraParams;
     use awsm_renderer::AwsmRendererBuilder;
 
     let mut renderer = AwsmRendererBuilder::new(gpu_builder)
-        .with_anti_aliasing(awsm_renderer::anti_alias::AntiAliasing {
-            msaa_sample_count: ANTI_ALIASING.msaa.then_some(4),
-            smaa: ANTI_ALIASING.smaa,
-            mipmap: true,
-            taa: None,
-        })
+        .with_anti_aliasing(aa.to_anti_aliasing())
         // GPU frame timing for the Stats panel's GPU group: timestamp queries
         // on every pass, folded into one whole-frame span (cheap; silently
         // off without `timestamp-query`). The CPU tier stays `Off` until the
         // renderer group is expanded.
-        .with_logging(awsm_renderer::debug::AwsmRendererLogging {
-            gpu: awsm_renderer::debug::TimingTier::Frame,
-            ..Default::default()
-        })
+        .with_logging(stats_logging())
         .with_phase_handler(|phase| {
             use awsm_renderer::RendererLoadingPhase as P;
             let message = match phase {
@@ -287,7 +295,10 @@ async fn run(
         .build()
         .await
         .map_err(|e| JsValue::from_str(&format!("build renderer: {e}")))?;
-    post_progress("render worker: WebGPU device + renderer ready");
+    post_progress(&format!(
+        "render worker: WebGPU device + renderer ready (anti-aliasing: {})",
+        AaMode::from_anti_aliasing(&renderer.anti_aliasing).label()
+    ));
 
     // ── Warm-up + scene fetch, CONCURRENTLY ─────────────────────────────────
     let bundle_base = format!("{}/{bundle_dir}", origin.trim_end_matches('/'));
@@ -299,8 +310,10 @@ async fn run(
         compiled.map_err(|e| JsValue::from_str(&format!("ensure_config_pipelines: {e}")))?;
     let mut scene =
         scene.map_err(|e| JsValue::from_str(&format!("load scene {scene_url}: {e}")))?;
-    // The loader applies the scene's anti-aliasing; make it this template's.
-    scene.post_process.anti_aliasing = ANTI_ALIASING;
+    // `load_scene_for_player` applies the scene's authored anti-aliasing
+    // (`post_process.anti_aliasing`): make it the renderer's, the page's
+    // choice, so the loader keeps it and nothing compiles twice.
+    scene.post_process.anti_aliasing = scene_anti_aliasing(&renderer.anti_aliasing);
     post_progress(&format!(
         "core pipelines ready ({compiled}) · scene parsed ({} nodes)",
         scene.nodes.len()
@@ -362,24 +375,47 @@ async fn run(
         state: OrbitState::START,
         posted: VecDeque::new(),
     }));
+    // If the page asked for TAA and this device cannot run it, the renderer
+    // fell back to MSAA 4× while loading: tell the page (it stops offering
+    // TAA and shows what runs).
+    if aa.is_taa() {
+        if let Some(reason) = renderer.taa_fallback_reason() {
+            tracing::warn!("render thread: TAA unavailable, running MSAA 4×: {reason}");
+            post_to_page(&SettingsToPage::AaCompileDone {
+                ok: true,
+                error: None,
+                mode: AaMode::from_anti_aliasing(&renderer.anti_aliasing),
+                taa_fallback: Some(reason.to_string()),
+            });
+        }
+    }
     #[allow(clippy::arc_with_non_send_sync)]
-    let cell = Rc::new(RefCell::new(renderer));
+    let cell: RendererCell = Rc::new(RefCell::new(Some(renderer)));
     let mirror: Rc<RefCell<Option<SimLink>>> = Rc::new(RefCell::new(None));
     // The instance the loader resolved, held until the sim worker announces its
     // model. There is exactly one in this template's scene; a multi-robot world
     // would key these by fingerprint instead.
-    let pending = Rc::new(RefCell::new(sim_instance));
-    // Which Stats groups are expanded (main sends it on change).
-    let profile = Rc::new(Cell::new(Profile::default()));
+    let mut pending = sim_instance;
+    // The sim worker's model description, once main forwards it: linked by
+    // the next frame (the frame loop owns the renderer).
+    let model: Rc<RefCell<Option<JsValue>>> = Rc::new(RefCell::new(None));
+    // The Stats panel's numbers (awsm-renderer-stats): main tells it which
+    // groups are open and what the page measured, and forwards the sim's
+    // reports; it posts a report about once a second.
+    let collector = Rc::new(RefCell::new(StatsCollector::new(stats::config())));
+    let sim_stats = Rc::new(RefCell::new(SimStats::default()));
+    // The latest anti-aliasing change the page asked for and that has not been
+    // applied yet (a newer one replaces it), and whether one is being applied.
+    let pending_aa: Rc<Cell<Option<AaMode>>> = Rc::new(Cell::new(None));
+    let busy = Rc::new(Cell::new(false));
 
     install_onmessage(
-        cell.clone(),
-        mirror.clone(),
-        pending,
+        model.clone(),
         camera.clone(),
         canvas.clone(),
-        overlays,
-        profile.clone(),
+        collector.clone(),
+        sim_stats.clone(),
+        pending_aa.clone(),
     )?;
     // Only now is the worker listening — main holds the model message until
     // this arrives.
@@ -391,21 +427,56 @@ async fn run(
     let raf_init = raf.clone();
     let raf_run = raf.clone();
     let mut frame_count: u32 = 0;
-    // Presented frames and their timing, for the page's Stats panel.
-    // Since 0.43 `gpu_timestamps` exists only once the GPU tier is on; the
-    // builder sets `gpu: Frame`, so here it is `Some` exactly when the device
-    // has timestamp queries.
-    let mut frame_window = crate::stats::FrameWindow::new(cell.borrow().gpu_timestamps.is_some());
     // This worker's clock origin: frame times are sent as absolute times, the
     // one timeline every thread of the page shares.
-    let time_origin = crate::stats::worker_time_origin();
+    let time_origin = stats::worker_time_origin();
     // The display's frame period (ms), smoothed: the camera's selection rule
     // needs half of it.
     let mut period_ms = 1000.0 / 60.0;
     let mut prev_vsync: Option<f64> = None;
 
     *raf_init.borrow_mut() = Some(Closure::new(move |vsync_ms: f64| {
-        let frame_start = crate::stats::worker_now();
+        // An anti-aliasing change owns the renderer: skip the frame.
+        if busy.get() {
+            schedule(&raf_run);
+            return;
+        }
+        // A pending Settings anti-aliasing change: apply it off the render
+        // path. `apply_anti_aliasing` (set_anti_aliasing + commit_load) is
+        // async and compiles the new mode's pipelines (the first switch in
+        // each direction; later ones hit the renderer's cache). It owns the
+        // renderer across its awaits, so no RefCell borrow is held over them;
+        // `busy` keeps every frame off the renderer until it is back. The
+        // page raises its "compiling pipelines" overlay from the events. The
+        // sim keeps stepping meanwhile; the first frame after catches up.
+        if let Some(mode) = pending_aa.take() {
+            if let Some(mut renderer) = cell.borrow_mut().take() {
+                busy.set(true);
+                let (cell, busy) = (cell.clone(), busy.clone());
+                wasm_bindgen_futures::spawn_local(async move {
+                    let result = apply_anti_aliasing(&mut renderer, mode, |event| {
+                        post_to_page(&SettingsToPage::from(event))
+                    })
+                    .await;
+                    match result {
+                        Ok(()) => tracing::info!(
+                            "render thread: anti-aliasing {}",
+                            AaMode::from_anti_aliasing(&renderer.anti_aliasing).label()
+                        ),
+                        Err(message) => {
+                            tracing::error!("render thread: {message}");
+                            post_to_main(&RenderMsg::Error { message });
+                        }
+                    }
+                    *cell.borrow_mut() = Some(renderer);
+                    busy.set(false);
+                });
+            }
+            schedule(&raf_run);
+            return;
+        }
+
+        let frame_start = worker_now();
         let now_abs_ms = time_origin + vsync_ms;
         // This frame's real time step (0 on the first frame): it advances the
         // scene's clips and particles, and feeds the period estimate.
@@ -415,20 +486,30 @@ async fn run(
         if frame_dt_ms > 2.0 && frame_dt_ms < 100.0 {
             period_ms += (frame_dt_ms - period_ms) * 0.1;
         }
-        let mut r = cell.borrow_mut();
+        let mut guard = cell.borrow_mut();
+        let Some(r) = guard.as_mut() else {
+            schedule(&raf_run);
+            return;
+        };
+
+        // The sim worker announced its model: bind its pose block to the
+        // scene's sim instance.
+        if let Some(data) = model.borrow_mut().take() {
+            link_model(r, &mut pending, &data, overlays, &mirror);
+        }
 
         // The renderer group's breakdown (our phases and awsm-renderer's CPU
         // scopes) is timed on every frame while it is expanded, never else.
-        frame_window.set_profile(profile.get());
-        let mut phases = frame_window.begin_frame(frame_start);
-        let tier = if phases.is_some() {
-            awsm_renderer::debug::TimingTier::SubFrame
-        } else {
-            awsm_renderer::debug::TimingTier::Off
+        let detail = {
+            let mut c = collector.borrow_mut();
+            c.begin_renderer_frame(r, frame_start);
+            c.renderer_detail()
         };
-        if r.logging.cpu != tier {
-            r.logging.cpu = tier;
-        }
+        let lap = |phase: Phase| {
+            if detail {
+                collector.borrow_mut().lap(phase as usize, worker_now());
+            }
+        };
 
         // Tell the sim this frame has started, first, so it steps while the
         // rest of the frame runs (see `protocol`, "Timing").
@@ -442,17 +523,17 @@ async fn run(
         if let Err(err) = r.update_animations(frame_dt_ms) {
             tracing::warn!("render thread: update_animations: {err}");
         }
-        particles.tick(&mut r, (frame_dt_ms / 1000.0) as f32);
-        lap(&mut phases, Phase::Animate);
+        particles.tick(r, (frame_dt_ms / 1000.0) as f32);
+        lap(Phase::Animate);
 
         // Then the sim's poses, at the time fixed by the previous frame. They
         // are written after the clips, so the sim wins on the nodes it drives.
         let mut late = false;
         if let (Some(m), Some(display_us)) = (sim.as_mut(), display_us) {
-            late = apply_poses(&mut r, m, display_us);
+            late = apply_poses(r, m, display_us);
         }
         drop(sim);
-        lap(&mut phases, Phase::Read);
+        lap(Phase::Read);
 
         let mut cam = camera.borrow_mut();
         cam.select(now_abs_ms, period_ms);
@@ -462,33 +543,84 @@ async fn run(
         params.focus_distance = cam.state.radius;
         let _ = r.set_camera(view, params);
         drop(cam);
-        lap(&mut phases, Phase::Camera);
+        lap(Phase::Camera);
 
         r.update_transforms();
-        lap(&mut phases, Phase::Transforms);
+        lap(Phase::Transforms);
         if let Err(err) = r.render(None) {
             tracing::warn!("render thread: render error: {err}");
         }
-        lap(&mut phases, Phase::Render);
-        drop(r);
+        lap(Phase::Render);
+        drop(guard);
 
         frame_count = frame_count.wrapping_add(1);
+        let mut c = collector.borrow_mut();
         if frame_count == 3 {
             post_to_main(&RenderMsg::Ready);
+            // The scene is on screen: the stats warm up, then count.
+            post_report(c.mark_ready());
+            sim_stats.borrow_mut().restart();
         }
-        let cpu_ms = crate::stats::worker_now() - frame_start;
-        if let Some(report) = frame_window.frame(vsync_ms, cpu_ms, late, phases) {
-            post_to_main(&RenderMsg::Stats(report));
+        let input = FrameInput {
+            late,
+            ..FrameInput::new(vsync_ms, worker_now() - frame_start)
+        };
+        if let Some(window) = c.end_frame(input, &RendererTimings) {
+            let section = sim_stats.borrow_mut().section(&window);
+            post_report(c.report(&window, vec![section]));
         }
-        if let Some(cb) = raf_run.borrow().as_ref() {
-            let _ = awsm_renderer::web_global::request_animation_frame(cb.as_ref().unchecked_ref());
-        }
+        drop(c);
+        schedule(&raf_run);
     }));
-    if let Some(cb) = raf_init.borrow().as_ref() {
-        awsm_renderer::web_global::request_animation_frame(cb.as_ref().unchecked_ref())?;
-    }
+    schedule(&raf_init);
     std::mem::forget(raf);
     Ok(())
+}
+
+/// Asks for the next animation frame for the render loop.
+fn schedule(raf: &RafCell) {
+    if let Some(cb) = raf.borrow().as_ref() {
+        let _ = awsm_renderer::web_global::request_animation_frame(cb.as_ref().unchecked_ref());
+    }
+}
+
+/// Bind the sim worker's model (`kind: "mujoco-model"`, forwarded by main) to
+/// the scene's sim instance, once.
+fn link_model(
+    r: &mut AwsmRenderer,
+    pending: &mut Option<awsm_renderer_scene_loader::mujoco::MujocoInstance>,
+    data: &JsValue,
+    overlays: OverlayToggles,
+    mirror: &RefCell<Option<SimLink>>,
+) {
+    let Some(instance) = pending.take() else {
+        tracing::warn!("render thread: no sim instance in the scene to drive");
+        post_to_main(&RenderMsg::Error {
+            message: "the loaded bundle has no MuJoCo sim instance — export a scene \
+                      with one imported via import_mujoco_from_url"
+                .to_string(),
+        });
+        return;
+    };
+    let bound = instance.geoms.iter().flatten().count();
+    let total = instance.geoms.len();
+    let label = instance
+        .model_name
+        .clone()
+        .unwrap_or_else(|| instance.source.filename.clone());
+    match link_sim(r, instance, data, overlays) {
+        Ok(m) => {
+            tracing::info!("render thread: driving {label} — {bound}/{total} geoms bound");
+            post_progress(&format!("sim linked ({bound}/{total} geoms) — running"));
+            *mirror.borrow_mut() = Some(m);
+        }
+        Err(err) => {
+            tracing::error!("link_sim: {err:?}");
+            post_to_main(&RenderMsg::Error {
+                message: format!("link sim: {err:?}"),
+            });
+        }
+    }
 }
 
 impl SimLink {
@@ -889,77 +1021,64 @@ struct OverlayToggles {
 }
 
 /// Install this worker's post-load `onmessage`: the forwarded MuJoCo model
-/// description (`kind: "mujoco-model"`), canvas resizes, the camera state, and
-/// which Stats groups are expanded.
+/// description (`kind: "mujoco-model"`), the sim's Stats reports (`kind:
+/// "sim-stats"`), the camera state, and the settings and stats kit's
+/// messages (canvas resizes, the anti-aliasing mode, which Stats groups are
+/// open, the page's own measurements).
 fn install_onmessage(
-    // The pose path never touches the renderer here — that is the point of the
-    // migration — but the DEBUG overlay has to mint its own nodes, so the
-    // handle is back for that one job.
-    cell: Rc<RefCell<awsm_renderer::AwsmRenderer>>,
-    mirror: Rc<RefCell<Option<SimLink>>>,
-    pending: Rc<RefCell<Option<awsm_renderer_scene_loader::mujoco::MujocoInstance>>>,
+    model: Rc<RefCell<Option<JsValue>>>,
     camera: Rc<RefCell<OrbitCamera>>,
     canvas: web_sys::OffscreenCanvas,
-    overlays: OverlayToggles,
-    profile: Rc<Cell<Profile>>,
+    collector: Rc<RefCell<StatsCollector>>,
+    sim_stats: Rc<RefCell<SimStats>>,
+    pending_aa: Rc<Cell<Option<AaMode>>>,
 ) -> Result<(), JsValue> {
     let scope = js_sys::global().unchecked_into::<web_sys::DedicatedWorkerGlobalScope>();
     let cb = Closure::<dyn FnMut(web_sys::MessageEvent)>::new(move |e: web_sys::MessageEvent| {
         let data = e.data();
         // The model description is a raw JS object tagged `kind` (it carries
-        // typed arrays — not serde territory).
+        // typed arrays — not serde territory); so are the sim's stats.
         let kind = js_sys::Reflect::get(&data, &JsValue::from_str("kind"))
             .ok()
             .and_then(|v| v.as_string());
-        if kind.as_deref() == Some("mujoco-model") {
-            let Some(instance) = pending.borrow_mut().take() else {
-                tracing::warn!("render thread: no sim instance in the scene to drive");
-                post_to_main(&RenderMsg::Error {
-                    message: "the loaded bundle has no MuJoCo sim instance — export a scene \
-                              with one imported via import_mujoco_from_url"
-                        .to_string(),
-                });
+        match kind.as_deref() {
+            Some("mujoco-model") => {
+                *model.borrow_mut() = Some(data);
                 return;
-            };
-            let bound = instance.geoms.iter().flatten().count();
-            let total = instance.geoms.len();
-            let label = instance
-                .model_name
-                .clone()
-                .unwrap_or_else(|| instance.source.filename.clone());
-            let mut r = cell.borrow_mut();
-            match link_sim(&mut r, instance, &data, overlays) {
-                Ok(m) => {
-                    tracing::info!("render thread: driving {label} — {bound}/{total} geoms bound");
-                    post_progress(&format!("sim linked ({bound}/{total} geoms) — running"));
-                    *mirror.borrow_mut() = Some(m);
+            }
+            Some("sim-stats") => {
+                sim_stats
+                    .borrow_mut()
+                    .sim_report(&SimReport::from_js(&data));
+                return;
+            }
+            _ => {}
+        }
+        // The settings and stats kit's messages (`{type: …}`).
+        if let Some(message) = SettingsToWorker::from_js(&data) {
+            match message {
+                Ok(SettingsToWorker::AntiAlias { mode }) => pending_aa.set(Some(mode)),
+                Ok(SettingsToWorker::Resize { width, height }) => {
+                    if width > 0 && height > 0 {
+                        canvas.set_width(width);
+                        canvas.set_height(height);
+                    }
                 }
-                Err(err) => {
-                    tracing::error!("link_sim: {err:?}");
-                    post_to_main(&RenderMsg::Error {
-                        message: format!("link sim: {err:?}"),
-                    });
-                }
+                Err(err) => tracing::warn!("render thread: settings message: {err}"),
             }
             return;
         }
-        if let Ok(ResizeMsg::Canvas { width, height }) =
-            serde_wasm_bindgen::from_value::<ResizeMsg>(data.clone())
-        {
-            if width > 0 && height > 0 {
-                canvas.set_width(width);
-                canvas.set_height(height);
+        if let Some(message) = StatsToWorker::from_js(&data) {
+            match message {
+                Ok(message) => collector.borrow_mut().handle(message),
+                Err(err) => tracing::warn!("render thread: stats message: {err}"),
             }
             return;
         }
         if let Ok(CameraMsg::State { t_ms, state }) =
-            serde_wasm_bindgen::from_value::<CameraMsg>(data.clone())
+            serde_wasm_bindgen::from_value::<CameraMsg>(data)
         {
             camera.borrow_mut().post(t_ms, state);
-            return;
-        }
-        if let Ok(ProfileMsg::Set(p)) = serde_wasm_bindgen::from_value::<ProfileMsg>(data) {
-            profile.set(p);
         }
     });
     scope.set_onmessage(Some(cb.as_ref().unchecked_ref()));

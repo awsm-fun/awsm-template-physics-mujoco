@@ -1,5 +1,14 @@
-//! The Stats panel (top right) and the Stats chip (bottom left) that shows and
-//! hides it, plus the render worker's half of what it measures.
+//! What this app adds to the Stats panel (top right; the Stats chip, bottom
+//! left, shows and hides it).
+//!
+//! awsm-renderer-stats does the measuring and the formatting: the frame
+//! windows, the warm-up, the smoothing, the frame budget, the display's
+//! refresh rate and missed frames, the renderer's CPU scopes and GPU passes
+//! (its `StatsCollector`, in the render worker), and the panel that shows
+//! the report (its `StatsPanel`, on the main thread). The panel tells the
+//! render worker which groups are open (`stats-view`) and what only the page
+//! can measure (`stats-page`: its own frame gaps and work); the render worker
+//! posts a report about once a second.
 //!
 //! One group per thread, so that every number sits under the thread that
 //! spent it, and every number says its unit and what it is per:
@@ -7,86 +16,46 @@
 //! ```text
 //! frame budget               the display's refresh period, and what each lane
 //!                            (the GPU, each thread) uses of it per frame.
-//! display                    the display's refresh rate (measured here, from
-//!                            this thread's own animation frames), the frames
-//!                            the render worker presented per second, and the
-//!                            refreshes that went by without a new frame.
+//! display                    the display's refresh rate (measured on the main
+//!                            thread, from its own animation frames), the
+//!                            frames the render worker presented per second,
+//!                            and the refreshes that went by without a new
+//!                            frame.
 //! GPU                        the GPU's time per frame, from the renderer's
 //!                            timestamp queries (`n/a` without them). Its rows
-//!                            are the passes; on GPUs that run passes
-//!                            overlapped (Apple's) they add up to more than
-//!                            the frame.
-//! renderer (render worker)   the render worker's CPU time per frame: its four
-//!                            phases, and under `render (encode + submit)`
-//!                            awsm-renderer's own CPU scopes, as `prepare`,
-//!                            `passes`, `submit` (and `hooks`).
-//! sim (MuJoCo, worker)       the MuJoCo worker's CPU time per fixed step, its
-//!                            steps per second, the frames the render worker
-//!                            drew before the sim had published the moment
-//!                            they show (late), and stepping vs publishing.
-//! page (main thread)         this thread's own work per frame: its two
-//!                            animation-frame loops, timed apart (`camera
-//!                            frame loop`, `refresh probe`).
+//!                            are the passes.
+//! renderer (render worker)   the render worker's CPU time per frame: its five
+//!                            phases ([`Phase`]), and under `render (encode +
+//!                            submit)` awsm-renderer's own CPU scopes.
+//! sim (MuJoCo, worker)       this file: the MuJoCo worker's CPU time per fixed
+//!                            step, its steps per second, the frames the render
+//!                            worker drew before the sim had published the
+//!                            moment they show (late), and stepping vs
+//!                            publishing. A lane of the frame budget.
+//! page (main thread)         the main thread's own work per frame (`camera
+//!                            frame loop`).
 //! ```
 //!
-//! A group's header always shows its headline number. Expanding a group shows
-//! its breakdown, and only then is the breakdown measured: the renderer group
-//! times the frame function's phases and switches awsm-renderer's CPU tier to
-//! `SubFrame`, on every frame (`Off` while collapsed); the GPU group passes on
-//! the per-pass GPU times (the `Frame` tier, always on for the headline,
-//! already times every pass); the sim group splits the MuJoCo worker's time
-//! into stepping and publishing. While the panel is hidden every group counts
-//! as collapsed. Main tells the render worker with a
-//! [`ProfileMsg`](crate::protocol::ProfileMsg) and the MuJoCo worker with
-//! `{kind: "profile"}`; the numbers come back about once a second, in the
-//! reports both already send. The frame budget group measures nothing of its
-//! own: it reads the other groups' headlines.
+//! **The sim's numbers.** The MuJoCo worker measures its own time (two clock
+//! reads per wake; the stepping vs publishing split only while the sim group
+//! is open, `{kind: "profile"}` from main) and reports about once a second
+//! (`{kind: "stats"}`). Main forwards each report to the render worker
+//! (`{kind: "sim-stats"}`), which smooths it here and puts the sim group in
+//! its report, so the sim joins the frame budget like every other thread.
 //!
 //! **Late frames.** Each frame draws the sim one frame behind, between the two
 //! published states around its display time (see `protocol`, "Timing"). A
 //! frame that finds the sim has not yet published a state past that time holds
 //! the newest one instead: the picture pauses for a frame. Late frames in
-//! [`LATE_WINDOWS`] windows in a row mean MuJoCo is not keeping up with real
+//! `LATE_WINDOWS` windows in a row mean MuJoCo is not keeping up with real
 //! time: the row and the sim header turn red.
-//!
-//! **Display rate.** No browser API reports the refresh rate, so the main
-//! thread runs its own (otherwise empty) `requestAnimationFrame` loop and
-//! measures it: the main thread does almost nothing here, so its frames land on
-//! every refresh. The period is the mean of the recent frame intervals that sit
-//! within 15% of their median, which ignores the odd late frame.
-//!
-//! **Missed frames.** The render worker reports, about once a second, how many
-//! frames it presented and how much time (`span_ms`, from rAF timestamp to rAF
-//! timestamp) they covered. That span lasted `round(span / period)` refreshes;
-//! every refresh beyond the frames presented showed the previous picture again
-//! — a missed frame, which is what makes motion hitch. A long gap (a hidden
-//! tab, a debugger pause) is left out of the span together with its frame, so
-//! pauses never count as misses.
 
-use std::cell::{Cell, RefCell};
-use std::collections::VecDeque;
-use std::rc::Rc;
-
-use awsm_renderer::profiling::{
-    cpu_scope_kind, cpu_timing_stats, gpu_frame_timing, gpu_timing_stats, CpuScopeKind, TimingStat,
-    CPU_PREP_PREFIX, CPU_SUBMIT_PREFIX, GPU_FRAME_SCOPE,
+use awsm_renderer_stats::{
+    duration_row, smooth, step_headline, AppSection, NamedMeans, SectionSpec, StatRow, StatsConfig,
+    Window,
 };
-use dominator::{clone, html, Dom};
-use futures_signals::map_ref;
-use futures_signals::signal::{Mutable, Signal, SignalExt};
-use futures_signals::signal_vec::SignalVecExt;
-use wasm_bindgen::prelude::*;
-use wasm_bindgen::JsCast;
-
-use crate::protocol::{FrameReport, Profile};
-
-// ── Render worker side ──────────────────────────────────────────────────────
-
-/// Roughly how often the render worker reports (ms of presented frames).
-const REPORT_SPAN_MS: f64 = 1000.0;
-/// A frame interval longer than this is a pause, not a slow frame: it is left
-/// out of the window (with its frame), so it never counts as missed frames.
-const GAP_MS: f64 = 250.0;
+use wasm_bindgen::{JsCast, JsValue};
+use web_sys::js_sys;
 
 /// The frame function's phases, in the order they run.
 #[derive(Clone, Copy)]
@@ -102,235 +71,147 @@ pub enum Phase {
     /// `AwsmRenderer::render`: encoding every pass and submitting.
     Render,
 }
-pub const PHASES: usize = 5;
-const PHASE_NAMES: [&str; PHASES] = [
+
+const PHASE_NAMES: [&str; 5] = [
     "animations + particles",
     "read app state + interpolate",
     "set camera",
     "update transforms",
     "render (encode + submit)",
 ];
-/// Times the phases of one frame. Only built while the renderer group is open.
-pub struct PhaseClock {
-    t: f64,
-    ms: [f64; PHASES],
-}
 
-/// Charge the time since the last lap to `phase` (a no-op without a clock).
-pub fn lap(clock: &mut Option<PhaseClock>, phase: Phase) {
-    if let Some(c) = clock {
-        let now = worker_now();
-        c.ms[phase as usize] += now - c.t;
-        c.t = now;
+/// The sim group's id (the page stores whether it is open under it, and
+/// tells the MuJoCo worker to split its time while it is).
+pub const SIM: &str = "sim";
+const SIM_LABEL: &str = "sim (MuJoCo, worker)";
+
+/// The page's work, as the page group names it.
+pub const PAGE_PART: &str = "camera frame loop";
+
+/// The panel's configuration, the same on both threads (the main thread
+/// shows the "starting…" report from it before the render worker is up).
+pub fn config() -> StatsConfig {
+    StatsConfig {
+        phases: PHASE_NAMES.map(String::from).to_vec(),
+        render_phase: Some(Phase::Render as usize),
+        sections: vec![SectionSpec::new(SIM, SIM_LABEL, Some("sim"))],
+        // The renderer draws on every refresh: no pacing to report.
+        pacing_row: false,
+        ..StatsConfig::default()
     }
 }
 
-/// The renderer group's breakdown, while it is expanded: every frame is timed,
-/// our phases and awsm-renderer's CPU scopes alike. A report sends the means
-/// per frame since the last one.
-struct Breakdown {
-    frames: u64,
-    phase_ms: [f64; PHASES],
-    /// awsm-renderer's scope totals at the last report. They are cumulative
-    /// and may hold an earlier expansion's, so the first base is taken when
-    /// the group opens.
-    scope_base: Totals,
+/// The MuJoCo worker's report (`{kind: "stats"}`, about once a second).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SimReport {
+    pub span_ms: f64,
+    pub steps: u32,
+    /// Its CPU time for those steps: stepping and publishing.
+    pub busy_ms: f64,
+    /// While the sim group is open: `[simulate, publish]` ms over that many
+    /// steps.
+    pub split: Option<([f64; 2], u32)>,
 }
 
-impl Breakdown {
-    fn new() -> Self {
+impl SimReport {
+    /// From the raw message (its fields are snake_case numbers).
+    pub fn from_js(data: &JsValue) -> Self {
+        let num = |k: &str| {
+            js_sys::Reflect::get(data, &JsValue::from_str(k))
+                .ok()
+                .and_then(|v| v.as_f64())
+        };
         Self {
-            frames: 0,
-            phase_ms: [0.0; PHASES],
-            scope_base: scope_totals(),
+            span_ms: num("span_ms").unwrap_or(0.0),
+            steps: num("steps").unwrap_or(0.0) as u32,
+            busy_ms: num("busy_ms").unwrap_or(0.0),
+            split: match (num("step_ms"), num("publish_ms"), num("split_steps")) {
+                (Some(step), Some(publish), Some(n)) => Some(([step, publish], n as u32)),
+                _ => None,
+            },
         }
     }
+}
 
-    fn add(&mut self, clock: PhaseClock) {
-        for (sum, ms) in self.phase_ms.iter_mut().zip(clock.ms) {
-            *sum += ms;
-        }
-        self.frames += 1;
+/// The sim group: the MuJoCo worker's reports, smoothed.
+#[derive(Default)]
+pub struct SimStats {
+    /// Whether the collector is counting (past its warm-up): reports before
+    /// that are start-up, not steady state, and are left out.
+    live: bool,
+    steps: Option<f64>,
+    step_ms: Option<f64>,
+    /// The worker's busy time per ms of real time.
+    load: Option<f64>,
+    /// Presented frames per second, for the sim's time per frame drawn.
+    fps: Option<f64>,
+    split: NamedMeans,
+}
+
+impl SimStats {
+    /// Counting starts over (the scene is on screen; the collector warms up).
+    pub fn restart(&mut self) {
+        *self = Self::default();
     }
 
-    fn report(&mut self, report: &mut FrameReport) {
-        if self.frames == 0 {
+    /// One report from the MuJoCo worker.
+    pub fn sim_report(&mut self, s: &SimReport) {
+        if !self.live || s.steps == 0 || s.span_ms <= 0.0 {
             return;
         }
-        let n = self.frames as f64;
-        report.phases_ms = Some(self.phase_ms.map(|ms| ms / n));
-        let now = scope_totals();
-        report.cpu_scopes = means(&now, &self.scope_base, n);
-        self.scope_base = now;
-        self.frames = 0;
-        self.phase_ms = [0.0; PHASES];
-    }
-}
-
-/// Running `(name, total_ms)` per awsm-renderer scope.
-type Totals = Vec<(&'static str, f64)>;
-
-fn totals(stats: Vec<(&'static str, TimingStat)>, keep: impl Fn(&str) -> bool) -> Totals {
-    stats
-        .into_iter()
-        .filter(|(name, _)| keep(name))
-        .map(|(name, s)| (name, s.total_ms))
-        .collect()
-}
-
-/// The CPU scopes inside `render()`. The whole-`render()` scope is left out:
-/// it is the same time as our render phase.
-fn scope_totals() -> Totals {
-    totals(cpu_timing_stats(), |name| {
-        cpu_scope_kind(name) != CpuScopeKind::Frame
-    })
-}
-
-/// The GPU passes, without the whole-frame entry (the group's headline).
-fn gpu_pass_totals() -> Totals {
-    totals(gpu_timing_stats(), |name| name != GPU_FRAME_SCOPE)
-}
-
-/// Each scope's time since `base`, divided by `per`; scopes that did not run
-/// are left out.
-fn means(now: &Totals, base: &Totals, per: f64) -> Vec<(String, f64)> {
-    now.iter()
-        .filter_map(|(name, total)| {
-            let before = base.iter().find(|(n, _)| n == name).map_or(0.0, |b| b.1);
-            (*total > before).then(|| (name.to_string(), (total - before) / per))
-        })
-        .collect()
-}
-
-/// The GPU's whole-frame `(total_ms, sampled frames)` so far.
-fn gpu_frames() -> Option<(f64, u64)> {
-    gpu_frame_timing().map(|s| (s.total_ms, s.count))
-}
-
-/// Counts presented frames on the render worker. Call [`FrameWindow::frame`]
-/// once per frame; post what it returns.
-pub struct FrameWindow {
-    prev_t: Option<f64>,
-    frames: u32,
-    span_ms: f64,
-    cpu_ms: f64,
-    late: u32,
-    gpu_available: bool,
-    /// The GPU whole-frame totals at the window's start.
-    gpu_base: Option<(f64, u64)>,
-    profile: Profile,
-    /// The renderer group's breakdown, while it is expanded.
-    breakdown: Option<Breakdown>,
-    /// GPU group: the pass totals and the sampled-frame count at the window's
-    /// start.
-    gpu_pass_base: (u64, Totals),
-}
-
-impl FrameWindow {
-    /// `gpu_available`: the renderer has timestamp queries.
-    pub fn new(gpu_available: bool) -> Self {
-        Self {
-            prev_t: None,
-            frames: 0,
-            span_ms: 0.0,
-            cpu_ms: 0.0,
-            late: 0,
-            gpu_available,
-            gpu_base: None,
-            profile: Profile::default(),
-            breakdown: None,
-            gpu_pass_base: (0, Vec::new()),
-        }
+        let steps = f64::from(s.steps);
+        self.steps = Some(smooth(self.steps, steps * 1000.0 / s.span_ms));
+        self.step_ms = Some(smooth(self.step_ms, s.busy_ms / steps));
+        self.load = Some(smooth(self.load, s.busy_ms / s.span_ms));
+        let split = s
+            .split
+            .filter(|(_, n)| *n > 0)
+            .map(|(ms, n)| {
+                let n = f64::from(n);
+                vec![
+                    ("simulate (mj_step)".to_string(), ms[0] / n),
+                    ("publish".to_string(), ms[1] / n),
+                ]
+            })
+            .unwrap_or_default();
+        self.split.update(split);
     }
 
-    /// Which groups are open (see [`Profile`]): start (or drop) the baselines
-    /// of a group that opened (or closed).
-    pub fn set_profile(&mut self, p: Profile) {
-        if p.renderer != self.profile.renderer {
-            self.breakdown = p.renderer.then(Breakdown::new);
+    /// The group for one window.
+    pub fn section(&mut self, window: &Window) -> AppSection {
+        self.live = true;
+        if window.span_ms > 0.0 {
+            self.fps = Some(smooth(
+                self.fps,
+                f64::from(window.frames) * 1000.0 / window.span_ms,
+            ));
         }
-        if p.gpu != self.profile.gpu {
-            self.gpu_pass_base = if p.gpu {
-                (gpu_frames().map_or(0, |f| f.1), gpu_pass_totals())
-            } else {
-                (0, Vec::new())
-            };
-        }
-        self.profile = p;
-    }
-
-    /// Start a frame at `t` (`performance.now()`): its phase clock while the
-    /// renderer group is open. The caller switches awsm-renderer's CPU tier to
-    /// `SubFrame` with a clock and `Off` without.
-    pub fn begin_frame(&mut self, t: f64) -> Option<PhaseClock> {
-        self.breakdown.as_ref().map(|_| PhaseClock {
-            t,
-            ms: [0.0; PHASES],
-        })
-    }
-
-    /// One presented frame: `t` is its rAF timestamp, `cpu_ms` the CPU time
-    /// the frame took, `late` whether it had to hold the sim's newest state,
-    /// `phases` its phase timings while the renderer group is open. Returns a
-    /// report when a window is full.
-    pub fn frame(
-        &mut self,
-        t: f64,
-        cpu_ms: f64,
-        late: bool,
-        phases: Option<PhaseClock>,
-    ) -> Option<FrameReport> {
-        // Pauses or not: the renderer's scopes count every frame they ran.
-        if let (Some(b), Some(p)) = (self.breakdown.as_mut(), phases) {
-            b.add(p);
-        }
-        let prev = self.prev_t.replace(t)?; // the first frame only starts the clock
-        let dt = t - prev;
-        if !(dt > 0.0 && dt <= GAP_MS) {
-            return None; // a pause: neither the gap nor this frame is counted
-        }
-        self.frames += 1;
-        self.span_ms += dt;
-        self.cpu_ms += cpu_ms;
-        self.late += u32::from(late);
-        if self.span_ms < REPORT_SPAN_MS {
-            return None;
-        }
-
-        // GPU means are per SAMPLED frame: the readback skips frames while
-        // one is in flight.
-        let gpu_now = gpu_frames();
-        let gpu_ms = match (self.gpu_base, gpu_now) {
-            (Some((t0, c0)), Some((t1, c1))) if c1 > c0 => Some((t1 - t0) / (c1 - c0) as f64),
-            _ => None,
-        };
-        self.gpu_base = gpu_now;
-        let mut report = FrameReport {
-            frames: self.frames,
-            span_ms: self.span_ms,
-            cpu_ms: self.cpu_ms,
-            late: self.late,
-            gpu_available: self.gpu_available,
-            gpu_ms,
-            ..FrameReport::default()
-        };
-        if self.profile.gpu {
-            let sampled = gpu_now.map_or(0, |f| f.1);
-            let now = gpu_pass_totals();
-            let (c0, base) = &self.gpu_pass_base;
-            if sampled > *c0 {
-                report.gpu_passes = means(&now, base, (sampled - c0) as f64);
-            }
-            self.gpu_pass_base = (sampled, now);
-        }
-        if let Some(b) = self.breakdown.as_mut() {
-            b.report(&mut report);
-        }
-        self.frames = 0;
-        self.span_ms = 0.0;
-        self.cpu_ms = 0.0;
-        self.late = 0;
-        Some(report)
+        // The sim's busy share of real time, times the real time per frame
+        // drawn: its time per step × steps per frame.
+        let per_frame = self
+            .load
+            .zip(self.fps.filter(|f| *f > 0.0))
+            .map(|(load, fps)| load * 1000.0 / fps);
+        let mut rows = vec![
+            StatRow::new(
+                "steps",
+                self.steps
+                    .map_or("—".to_string(), |r| format!("{r:.0} steps/s")),
+            ),
+            window.late.row("late frames"),
+        ];
+        rows.extend(
+            self.split
+                .entries()
+                .iter()
+                .map(|(name, ms)| duration_row(name.clone(), *ms, "step")),
+        );
+        SectionSpec::new(SIM, SIM_LABEL, Some("sim"))
+            .group()
+            .headline(step_headline(self.step_ms))
+            .bad(window.late.bad)
+            .rows(rows)
+            .budget_ms(per_frame)
     }
 }
 
@@ -355,1042 +236,39 @@ pub fn worker_now() -> f64 {
         .unwrap_or(0.0)
 }
 
-// ── Main thread side ────────────────────────────────────────────────────────
-
-/// Smoothing weight of each new window: a real change shows within 2–3
-/// windows, while the readout holds steady against noise.
-const EMA_ALPHA: f64 = 0.35;
-/// Frames that must be presented after `Ready` before anything is counted:
-/// start-up is not steady state (caches are cold, the wasm engine is still
-/// optimizing), and those first windows read badly.
-const WARMUP_FRAMES: u32 = 60;
-/// Main-thread frame intervals kept for the refresh estimate, and how many are
-/// needed before there is one.
-const REFRESH_SAMPLES: usize = 120;
-const REFRESH_MIN_SAMPLES: usize = 30;
-/// Intervals within this share of the median count as single refreshes.
-const REFRESH_INLIER: f64 = 0.15;
-/// Late frames in this many windows in a row turn the sim red: a steady
-/// condition, not a one-off such as a tab switch.
-const LATE_WINDOWS: u32 = 3;
-/// awsm-renderer's CPU scopes whose mean is below this (1 µs) are folded into
-/// one row of their subgroup.
-const FOLD_BELOW_MS: f64 = 0.001;
-/// The renderer's scope subgroups under the render phase, in the order they
-/// run (`Frame`, all of `render()`, is the phase itself).
-const SCOPE_GROUPS: [(CpuScopeKind, &str); 4] = [
-    (CpuScopeKind::Prep, "prepare"),
-    (CpuScopeKind::Pass, "passes"),
-    (CpuScopeKind::Submit, "submit"),
-    (CpuScopeKind::Hook, "hooks"),
-];
-/// A lane's share of the frame budget from which its bar warns.
-const SHARE_WARN: f64 = 0.8;
-
-/// The MuJoCo worker's report (`{kind: "stats"}`, about once a second).
-pub struct SimReport {
-    pub span_ms: f64,
-    pub steps: u32,
-    /// Its CPU time for those steps: stepping and publishing.
-    pub busy_ms: f64,
-    /// While the sim group is open: `[simulate, publish]` ms over that many
-    /// steps.
-    pub split: Option<([f64; 2], u32)>,
-}
-
-/// One row of a group: label left, value right.
-#[derive(Clone)]
-struct Row {
-    label: String,
-    value: String,
-    /// 0 for a group's own rows; 1 and 2 for a breakdown of a row above (the
-    /// renderer's scope subgroups under `render`, and their scopes).
-    indent: u8,
-    bad: bool,
-    /// A lane's row of the frame budget.
-    budget: Option<Budget>,
-}
-
-/// A lane's row of the frame budget: the lane's dot, and a bar for its share.
-#[derive(Clone, Copy)]
-struct Budget {
-    lane: &'static str,
-    /// Its time per frame over the budget.
-    share: f64,
-}
-
-impl Row {
-    fn new(label: impl Into<String>, value: String) -> Self {
-        Self {
-            label: label.into(),
-            value,
-            indent: 0,
-            bad: false,
-            budget: None,
-        }
-    }
-
-    fn nested(indent: u8, label: impl Into<String>, value: String) -> Self {
-        Self {
-            indent,
-            ..Self::new(label, value)
-        }
-    }
-}
-
-/// One collapsible group of the panel.
-struct Group {
-    id: &'static str,
-    label: &'static str,
-    /// The group's colour (`data-lane` in index.html): a dot on its header and
-    /// on its row of the frame budget, so that the two pair up.
-    lane: Option<&'static str>,
-    open: Mutable<bool>,
-    headline: Mutable<String>,
-    bad: Mutable<bool>,
-    rows: Mutable<Vec<Row>>,
-}
-
-impl Group {
-    fn new(
-        window: &web_sys::Window,
-        prefix: &str,
-        id: &'static str,
-        label: &'static str,
-        lane: Option<&'static str>,
-    ) -> Self {
-        Self {
-            id,
-            label,
-            lane,
-            open: Mutable::new(stored_bool(window, &open_key(prefix, id)) == Some(true)),
-            headline: Mutable::new(String::new()),
-            bad: Mutable::new(false),
-            rows: Mutable::new(Vec::new()),
-        }
-    }
-
-    fn set(&self, headline: String, rows: Vec<Row>, bad: bool) {
-        self.headline.set_neq(headline);
-        self.bad.set_neq(bad);
-        self.rows.set(rows);
-    }
-
-    /// The header, then the rows it shows while expanded.
-    fn dom(&self, prefix: &'static str) -> [Dom; 2] {
-        let (id, label) = (self.id, self.label);
-        let open = self.open.clone();
-        let rows_id = format!("stats-rows-{id}");
-        let headline = self
-            .headline
-            .signal_cloned()
-            .map(|v| value_spans(&v))
-            .to_signal_vec();
-        [
-            html!("button", {
-                .class("stats-group")
-                .attr("type", "button")
-                .attr("aria-controls", &rows_id)
-                .class_signal("stats-bad", self.bad.signal())
-                .attr_signal("aria-expanded", open.signal().map(|o| if o { "true" } else { "false" }))
-                .child(html!("span", {
-                    .class("stats-name")
-                    .child(html!("span", {
-                        .text_signal(open.signal().map(|o| if o { "▾ " } else { "▸ " }))
-                    }))
-                    .children(self.lane.map(dot))
-                    .text(label)
-                }))
-                .text(" ") // for a screen reader; the layout ignores it
-                .child(html!("span", {
-                    .class("stats-value")
-                    .children_signal_vec(headline)
-                }))
-                .event(clone!(open => move |_: dominator::events::Click| {
-                    let next = !open.get();
-                    open.set_neq(next);
-                    if let Some(w) = web_sys::window() {
-                        store_bool(&w, &open_key(prefix, id), next);
-                    }
-                }))
-            }),
-            html!("div", {
-                .class("stats-rows")
-                .attr("id", &rows_id)
-                .prop_signal("hidden", open.signal().map(|o| !o))
-                .children_signal_vec(self.rows.signal_cloned().to_signal_vec().map(|row| {
-                    html!("div", {
-                        .class("stats-row")
-                        .apply_if(row.indent == 1, |d| d.class("stats-nested"))
-                        .apply_if(row.indent == 2, |d| d.class("stats-nested-2"))
-                        .apply_if(row.bad, |d| d.class("stats-bad"))
-                        .child(html!("span", {
-                            .class("stats-name")
-                            .children(row.budget.map(|b| dot(b.lane)))
-                            .text(&row.label)
-                        }))
-                        .child(html!("span", {
-                            .class("stats-value")
-                            .children(row.budget.map(|b| bar(b.share)))
-                            .children(value_spans(&row.value))
-                        }))
-                    })
-                }))
-            }),
-        ]
-    }
-}
-
-/// A lane's dot.
-fn dot(lane: &str) -> Dom {
-    html!("span", {
-        .class("stats-dot")
-        .attr("data-lane", lane)
-    })
-}
-
-/// A lane's share of the frame budget as a bar; its colour says how close to
-/// the budget.
-fn bar(share: f64) -> Dom {
-    let (state, width) = bar_look(share);
-    html!("span", {
-        .class("stats-bar")
-        .apply(|d| match state {
-            Some(state) => d.class(state),
-            None => d,
-        })
-        .child(html!("span", {
-            .style("width", format!("{width}%"))
-        }))
-    })
-}
-
-/// A bar's state class (`stats-warn` from [`SHARE_WARN`], `stats-over` past
-/// the budget) and its fill in percent, capped at a full bar.
-fn bar_look(share: f64) -> (Option<&'static str>, f64) {
-    let state = if share > 1.0 {
-        Some("stats-over")
-    } else if share >= SHARE_WARN {
-        Some("stats-warn")
-    } else {
-        None
-    };
-    (state, share.min(1.0) * 100.0)
-}
-
-/// A value as it is shown: the numbers bright, the units and words around them
-/// smaller and dimmer.
-fn value_spans(text: &str) -> Vec<Dom> {
-    value_pieces(text)
-        .into_iter()
-        .map(|(num, piece)| {
-            html!("span", {
-                .class(if num { "stats-num" } else { "stats-unit" })
-                .text(piece)
-            })
-        })
-        .collect()
-}
-
-/// `text` split into numbers (`true`) and what is between them, by the other
-/// templates' rule `/<?\d[\d.]*%?/`: an optional `<`, a digit, digits and
-/// dots, an optional `%`.
-fn value_pieces(text: &str) -> Vec<(bool, &str)> {
-    let b = text.as_bytes();
-    let mut pieces = Vec::new();
-    let (mut start, mut i) = (0, 0);
-    while i < b.len() {
-        let digit = i + usize::from(b[i] == b'<');
-        if !b.get(digit).is_some_and(u8::is_ascii_digit) {
-            i += 1;
-            continue;
-        }
-        let mut end = digit + 1;
-        while b.get(end).is_some_and(|c| c.is_ascii_digit() || *c == b'.') {
-            end += 1;
-        }
-        if b.get(end) == Some(&b'%') {
-            end += 1;
-        }
-        // Every boundary is at an ASCII byte, so on a char boundary.
-        if start < i {
-            pieces.push((false, &text[start..i]));
-        }
-        pieces.push((true, &text[i..end]));
-        (start, i) = (end, end);
-    }
-    if start < b.len() {
-        pieces.push((false, &text[start..]));
-    }
-    pieces
-}
-
-/// `<prefix>stats_open_<id>`: whether a group is expanded.
-fn open_key(prefix: &str, id: &str) -> String {
-    format!("{prefix}stats_open_{id}")
-}
-
-/// The main thread's own per-frame work since the last report, for the page
-/// group.
-#[derive(Default)]
-struct PageWork {
-    frames: Cell<u32>,
-    camera_ms: Cell<f64>,
-    refresh_ms: Cell<f64>,
-}
-
-/// The panel's state; owned by the main thread.
-pub struct Stats {
-    panel: Mutable<bool>,
-    budget: Group,
-    display: Group,
-    gpu: Group,
-    renderer: Group,
-    sim: Group,
-    page: Group,
-    state: RefCell<State>,
-    refresh: Rc<RefCell<VecDeque<f64>>>,
-    work: Rc<PageWork>,
-    perf: Option<web_sys::Performance>,
-}
-
-#[derive(Default)]
-struct State {
-    ready: bool,
-    warm_frames: u32,
-    /// Shown in place of every figure until there are numbers.
-    placeholder: Option<&'static str>,
-    fps_ema: Option<f64>,
-    cpu_ema: Option<f64>,
-    gpu_ema: Option<f64>,
-    gpu_available: bool,
-    step_ema: Option<f64>,
-    steps_ema: Option<f64>,
-    /// The MuJoCo worker's busy time per ms of real time.
-    sim_load_ema: Option<f64>,
-    page_ema: Option<f64>,
-    /// The page's two animation-frame loops, per frame.
-    page_rows: Vec<(String, f64)>,
-    missed_rate: Option<f64>,
-    /// Signed running sum of (refreshes - frames): a window whose ends fall
-    /// unevenly can read ±1, and the next one cancels it.
-    missed_sum: f64,
-    late_rate: f64,
-    late_total: u64,
-    late_windows: u32,
-    /// The breakdowns, smoothed per name. An entry missing from a report is no
-    /// longer measured (its group closed, or the pass did not run) and drops
-    /// out rather than show a stale figure.
-    phases: Vec<(String, f64)>,
-    cpu_scopes: Vec<(String, f64)>,
-    gpu_passes: Vec<(String, f64)>,
-    sim_phases: Vec<(String, f64)>,
-}
-
-impl Stats {
-    /// Mount the panel and its chip, and start measuring the display.
-    /// `prefix` is this app's `localStorage` prefix: `<prefix>stats` remembers
-    /// whether the panel is open, `<prefix>stats_open_<group>` each group.
-    /// `on_help` explains the numbers (the panel's `what do these mean?`).
-    pub fn install(
-        window: &web_sys::Window,
-        prefix: &'static str,
-        on_help: impl Fn() + 'static,
-    ) -> Rc<Self> {
-        let group = |id, label, lane| Group::new(window, prefix, id, label, lane);
-        let stats = Rc::new(Self {
-            // Off by default: on a phone the panel covers a lot of the screen.
-            // A stored "open" is honoured only on a desktop; on a touch device
-            // the chip still opens it for the session.
-            panel: Mutable::new(
-                !coarse_pointer(window)
-                    && stored_bool(window, &format!("{prefix}stats")) == Some(true),
-            ),
-            budget: group("budget", "frame budget", None),
-            display: group("display", "display", None),
-            gpu: group("gpu", "GPU", Some("gpu")),
-            renderer: group("renderer", "renderer (render worker)", Some("renderer")),
-            sim: group("sim", "sim (MuJoCo, worker)", Some("sim")),
-            page: group("page", "page (main thread)", Some("page")),
-            state: RefCell::new(State {
-                placeholder: Some("starting…"),
-                ..State::default()
-            }),
-            refresh: Rc::new(RefCell::new(VecDeque::with_capacity(REFRESH_SAMPLES))),
-            work: Rc::new(PageWork::default()),
-            perf: window.performance(),
-        });
-        stats.show(&stats.state.borrow());
-
-        let panel = stats.panel.clone();
-        dominator::append_dom(
-            &dominator::body(),
-            html!("div", {
-                .child(html!("div", {
-                    .class("stats")
-                    .visible_signal(panel.signal())
-                    .child(html!("button", {
-                        .class("stats-help")
-                        .attr("type", "button")
-                        .text("what do these mean?")
-                        .event(move |_: dominator::events::Click| on_help())
-                    }))
-                    .children(stats.groups().into_iter().flat_map(|g| g.dom(prefix)))
-                }))
-                .child(html!("button", {
-                    .class("stats-btn")
-                    .class_signal("active", panel.signal())
-                    .text("Stats")
-                    .event(clone!(panel => move |_: dominator::events::Click| {
-                        let next = !panel.get();
-                        panel.set_neq(next);
-                        if let Some(w) = web_sys::window() {
-                            store_bool(&w, &format!("{prefix}stats"), next);
-                        }
-                    }))
-                }))
-            }),
-        );
-
-        measure_refresh(
-            stats.refresh.clone(),
-            stats.work.clone(),
-            stats.perf.clone(),
-        );
-        stats
-    }
-
-    fn groups(&self) -> [&Group; 6] {
-        [
-            &self.budget,
-            &self.display,
-            &self.gpu,
-            &self.renderer,
-            &self.sim,
-            &self.page,
-        ]
-    }
-
-    /// Which render-worker groups are expanded (none while the panel is
-    /// hidden).
-    pub fn profile(&self) -> Profile {
-        let panel = self.panel.get();
-        Profile {
-            renderer: panel && self.renderer.open.get(),
-            gpu: panel && self.gpu.open.get(),
-        }
-    }
-
-    /// [`Self::profile`] as it changes.
-    pub fn profile_signal(&self) -> impl Signal<Item = Profile> {
-        map_ref! {
-            let panel = self.panel.signal(),
-            let renderer = self.renderer.open.signal(),
-            let gpu = self.gpu.open.signal() =>
-            Profile { renderer: *panel && *renderer, gpu: *panel && *gpu }
-        }
-        .dedupe()
-    }
-
-    /// Whether the sim group is expanded (and the panel shown), as it changes.
-    pub fn sim_profile_signal(&self) -> impl Signal<Item = bool> {
-        map_ref! {
-            let panel = self.panel.signal(),
-            let sim = self.sim.open.signal() => *panel && *sim
-        }
-        .dedupe()
-    }
-
-    /// Run the page's per-frame camera work, timed for the page group.
-    pub fn time_camera(&self, f: impl FnOnce()) {
-        let t0 = now(&self.perf);
-        f();
-        let w = &self.work;
-        w.camera_ms.set(w.camera_ms.get() + now(&self.perf) - t0);
-    }
-
-    /// The renderer is presenting real frames: start the warm-up.
-    pub fn mark_ready(&self) {
-        let mut st = self.state.borrow_mut();
-        st.ready = true;
-        st.placeholder = Some("warming up…");
-        self.show(&st);
-    }
-
-    /// One report from the render worker.
-    pub fn window(&self, r: FrameReport) {
-        let mut st = self.state.borrow_mut();
-        // The page's work since the last report, warm or not.
-        let page_frames = self.work.frames.replace(0);
-        let page_ms = [
-            self.work.camera_ms.replace(0.0),
-            self.work.refresh_ms.replace(0.0),
-        ];
-        if !st.ready || r.frames == 0 || r.span_ms <= 0.0 {
-            return;
-        }
-        if st.warm_frames < WARMUP_FRAMES {
-            st.warm_frames += r.frames;
-            return;
-        }
-        st.placeholder = None;
-        let frames = f64::from(r.frames);
-
-        st.fps_ema = smooth(st.fps_ema, frames * 1000.0 / r.span_ms);
-        if let Some(p) = refresh_period(&self.refresh.borrow()) {
-            let missed = (r.span_ms / p).round() - frames;
-            st.missed_sum += missed;
-            st.missed_rate = Some(missed.max(0.0) * 1000.0 / r.span_ms);
-        }
-        st.gpu_available = r.gpu_available;
-        if let Some(ms) = r.gpu_ms {
-            st.gpu_ema = smooth(st.gpu_ema, ms);
-        }
-        st.cpu_ema = smooth(st.cpu_ema, r.cpu_ms / frames);
-        if page_frames > 0 {
-            let n = f64::from(page_frames);
-            st.page_ema = smooth(st.page_ema, (page_ms[0] + page_ms[1]) / n);
-            let rows = vec![
-                ("camera frame loop".to_string(), page_ms[0] / n),
-                ("refresh probe".to_string(), page_ms[1] / n),
-            ];
-            st.page_rows = smooth_named(&st.page_rows, rows);
-        }
-
-        st.late_total += u64::from(r.late);
-        st.late_rate = f64::from(r.late) * 1000.0 / r.span_ms;
-        st.late_windows = if r.late > 0 { st.late_windows + 1 } else { 0 };
-
-        let phases: Vec<(String, f64)> = r
-            .phases_ms
-            .map(|p| PHASE_NAMES.iter().map(|n| n.to_string()).zip(p).collect())
-            .unwrap_or_default();
-        st.phases = smooth_named(&st.phases, phases);
-        st.cpu_scopes = smooth_named(&st.cpu_scopes, r.cpu_scopes);
-        st.gpu_passes = smooth_named(&st.gpu_passes, r.gpu_passes);
-        self.show(&st);
-    }
-
-    /// One report from the MuJoCo worker.
-    pub fn sim_window(&self, s: SimReport) {
-        let mut st = self.state.borrow_mut();
-        if st.placeholder.is_some() || s.steps == 0 || s.span_ms <= 0.0 {
-            return;
-        }
-        let steps = f64::from(s.steps);
-        st.steps_ema = smooth(st.steps_ema, steps * 1000.0 / s.span_ms);
-        st.step_ema = smooth(st.step_ema, s.busy_ms / steps);
-        st.sim_load_ema = smooth(st.sim_load_ema, s.busy_ms / s.span_ms);
-        let split: Vec<(String, f64)> = s
-            .split
-            .filter(|(_, n)| *n > 0)
-            .map(|(ms, n)| {
-                let n = f64::from(n);
-                vec![
-                    ("simulate (mj_step)".to_string(), ms[0] / n),
-                    ("publish".to_string(), ms[1] / n),
-                ]
-            })
-            .unwrap_or_default();
-        st.sim_phases = smooth_named(&st.sim_phases, split);
-        self.show(&st);
-    }
-
-    fn show(&self, st: &State) {
-        if let Some(p) = st.placeholder {
-            for g in self.groups() {
-                let headline = if g.id == "display" { "—" } else { p };
-                g.set(headline.to_string(), Vec::new(), false);
-            }
-            return;
-        }
-
-        let period = refresh_period(&self.refresh.borrow());
-        self.show_budget(st, period);
-
-        let hz = period.map_or("measuring…".to_string(), |p| {
-            format!("{:.0} Hz", 1000.0 / p)
-        });
-        let fps = st.fps_ema.unwrap_or(0.0);
-        self.display.set(
-            format!("{hz} · {fps:.0} fps"),
-            vec![
-                Row::new("refresh rate", hz),
-                Row::new("frames presented", format!("{fps:.0} / s")),
-                Row::new(
-                    "missed frames",
-                    st.missed_rate.map_or("—".to_string(), |r| {
-                        format!("{r:.0} / s · {} total", st.missed_sum.max(0.0).round())
-                    }),
-                ),
-            ],
-            false,
-        );
-
-        self.gpu.set(
-            match (st.gpu_ema, st.gpu_available) {
-                (Some(ms), _) => per_frame(ms),
-                (None, false) => "n/a".to_string(),
-                (None, true) => "—".to_string(),
-            },
-            slowest_first(&st.gpu_passes)
-                .map(|(name, ms)| Row::new(name, per_frame(*ms)))
-                .collect(),
-            false,
-        );
-
-        // The phases in the order they run, with awsm-renderer's CPU scopes
-        // under the phase that runs them.
-        let mut rows = Vec::new();
-        for (name, ms) in &st.phases {
-            rows.push(Row::new(name, per_frame(*ms)));
-            if name == PHASE_NAMES[Phase::Render as usize] {
-                rows.extend(scope_rows(*ms, &st.cpu_scopes));
-            }
-        }
-        self.renderer
-            .set(st.cpu_ema.map_or("—".to_string(), per_frame), rows, false);
-
-        let late = st.late_windows >= LATE_WINDOWS;
-        let mut rows = vec![
-            Row::new(
-                "steps",
-                st.steps_ema
-                    .map_or("—".to_string(), |r| format!("{r:.0} steps/s")),
-            ),
-            Row {
-                bad: late,
-                ..Row::new(
-                    "late frames",
-                    format!("{:.0} / s · {} total", st.late_rate, st.late_total),
-                )
-            },
-        ];
-        rows.extend(
-            st.sim_phases
-                .iter()
-                .map(|(name, ms)| Row::new(name, per_step(*ms))),
-        );
-        self.sim
-            .set(st.step_ema.map_or("—".to_string(), per_step), rows, late);
-
-        self.page.set(
-            st.page_ema.map_or("—".to_string(), per_frame),
-            st.page_rows
-                .iter()
-                .map(|(name, ms)| Row::new(name, per_frame(*ms)))
-                .collect(),
-            false,
-        );
-    }
-
-    /// The frame budget group: what each lane uses of one refresh period.
-    ///
-    /// CPU and GPU work run in parallel, so each must fit the budget on its
-    /// own; they do not add up, except when the CPU waits on the GPU, which
-    /// shows as missed frames. Hence headroom is against the largest lane,
-    /// and the renderer + GPU sum is shown for reference only.
-    fn show_budget(&self, st: &State, period: Option<f64>) {
-        let Some(budget) = period else {
-            self.budget.set("measuring…".to_string(), Vec::new(), false);
-            return;
-        };
-        // The sim's busy share of real time, times the real time per frame
-        // drawn: its time per step × steps per frame.
-        let sim = st
-            .sim_load_ema
-            .zip(st.fps_ema.filter(|f| *f > 0.0))
-            .map(|(load, fps)| load * 1000.0 / fps);
-        let lanes = [
-            (&self.gpu, st.gpu_ema),
-            (&self.renderer, st.cpu_ema),
-            (&self.sim, sim),
-            (&self.page, st.page_ema),
-        ];
-        let mut rows: Vec<Row> = lanes
-            .iter()
-            .filter_map(|(group, used)| {
-                used.map(|u| Row {
-                    budget: group.lane.map(|lane| Budget {
-                        lane,
-                        share: u / budget,
-                    }),
-                    ..Row::new(group.label, budget_share(u, budget))
-                })
-            })
-            .collect();
-        if let (Some(cpu), Some(gpu)) = (st.cpu_ema, st.gpu_ema) {
-            rows.push(Row::new(
-                "latency (renderer + GPU), reference only",
-                format!("{:.1} ms", cpu + gpu),
-            ));
-        }
-        let largest = lanes.iter().filter_map(|l| l.1).reduce(f64::max);
-        let (headline, over) = budget_headline(budget, largest);
-        self.budget.set(headline, rows, over);
-    }
-}
-
-/// `16.7 ms (60 Hz) · headroom 9.5 ms`, or `· over by 1.2 ms` (and `true`)
-/// when the largest lane does not fit.
-fn budget_headline(budget: f64, largest: Option<f64>) -> (String, bool) {
-    let mut s = format!("{budget:.1} ms ({:.0} Hz)", 1000.0 / budget);
-    let Some(used) = largest else {
-        return (s, false);
-    };
-    let headroom = budget - used;
-    if headroom < 0.0 {
-        s.push_str(&format!(" · over by {:.1} ms", -headroom));
-    } else {
-        s.push_str(&format!(" · headroom {headroom:.1} ms"));
-    }
-    (s, headroom < 0.0)
-}
-
-/// One lane's row: `0.6 / 16.7 ms (4%)`.
-fn budget_share(used: f64, budget: f64) -> String {
-    let used_s = if used > 0.0 && used < 0.05 {
-        "<0.1".to_string()
-    } else {
-        format!("{used:.1}")
-    };
-    let pct = used / budget * 100.0;
-    let pct_s = if pct > 0.0 && pct < 1.0 {
-        "<1%".to_string()
-    } else {
-        format!("{pct:.0}%")
-    };
-    format!("{used_s} / {budget:.1} ms ({pct_s})")
-}
-
-/// awsm-renderer's CPU scopes under the render phase (`render_ms`): one
-/// subgroup per kind with its sum, its scopes slowest first and those under
-/// 1 µs folded into one row, then what no scope covers (the glue between
-/// them). Nothing without scopes.
-fn scope_rows(render_ms: f64, scopes: &[(String, f64)]) -> Vec<Row> {
-    let mut rows = Vec::new();
-    if scopes.is_empty() {
-        return rows;
-    }
-    let mut in_scopes = 0.0;
-    for (kind, label) in SCOPE_GROUPS {
-        let mut members: Vec<(&str, f64)> = scopes
-            .iter()
-            .filter(|(name, _)| cpu_scope_kind(name) == kind)
-            .map(|(name, ms)| {
-                let short = name
-                    .strip_prefix(CPU_PREP_PREFIX)
-                    .or_else(|| name.strip_prefix(CPU_SUBMIT_PREFIX))
-                    .unwrap_or(name);
-                (short, *ms)
-            })
-            .collect();
-        if members.is_empty() {
-            continue;
-        }
-        members.sort_by(|a, b| b.1.total_cmp(&a.1));
-        let sum: f64 = members.iter().map(|m| m.1).sum();
-        in_scopes += sum;
-        rows.push(Row::nested(1, label, per_frame(sum)));
-        let (shown, folded): (Vec<_>, Vec<_>) =
-            members.into_iter().partition(|m| m.1 >= FOLD_BELOW_MS);
-        rows.extend(
-            shown
-                .into_iter()
-                .map(|(name, ms)| Row::nested(2, name, per_frame(ms))),
-        );
-        if !folded.is_empty() {
-            let ms = folded.iter().map(|m| m.1).sum();
-            let label = format!("{} more under 1 µs", folded.len());
-            rows.push(Row::nested(2, label, per_frame(ms)));
-        }
-    }
-    rows.push(Row::nested(
-        1,
-        "outside the scopes",
-        per_frame((render_ms - in_scopes).max(0.0)),
-    ));
-    rows
-}
-
-fn smooth(ema: Option<f64>, v: f64) -> Option<f64> {
-    Some(ema.map_or(v, |e| e + (v - e) * EMA_ALPHA))
-}
-
-/// `now`, each entry smoothed against the same name in `prev`.
-fn smooth_named(prev: &[(String, f64)], now: Vec<(String, f64)>) -> Vec<(String, f64)> {
-    now.into_iter()
-        .map(|(name, v)| {
-            let ema = prev.iter().find(|(n, _)| *n == name).map(|p| p.1);
-            let v = smooth(ema, v).unwrap_or(v);
-            (name, v)
-        })
-        .collect()
-}
-
-fn slowest_first(entries: &[(String, f64)]) -> impl Iterator<Item = &(String, f64)> {
-    let mut sorted: Vec<&(String, f64)> = entries.iter().collect();
-    sorted.sort_by(|a, b| b.1.total_cmp(&a.1));
-    sorted.into_iter()
-}
-
-/// A duration with its unit: microseconds below a tenth of a millisecond.
-fn duration(ms: f64) -> String {
-    if ms < 0.09995 {
-        let us = ms * 1000.0;
-        if us < 9.95 {
-            format!("{us:.1} µs")
-        } else {
-            format!("{us:.0} µs")
-        }
-    } else if ms < 9.995 {
-        format!("{ms:.2} ms")
-    } else {
-        format!("{ms:.1} ms")
-    }
-}
-
-fn per_frame(ms: f64) -> String {
-    format!("{} / frame", duration(ms))
-}
-
-fn per_step(ms: f64) -> String {
-    format!("{} / step", duration(ms))
-}
-
-fn now(perf: &Option<web_sys::Performance>) -> f64 {
-    perf.as_ref().map_or(0.0, |p| p.now())
-}
-
-/// The main thread's own rAF loop: records frame intervals for
-/// [`refresh_period`] and counts (and times) the page's frames. Runs for the
-/// page's lifetime.
-fn measure_refresh(
-    samples: Rc<RefCell<VecDeque<f64>>>,
-    work: Rc<PageWork>,
-    perf: Option<web_sys::Performance>,
-) {
-    type Cb = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
-    let cb: Cb = Rc::new(RefCell::new(None));
-    let again = cb.clone();
-    let mut prev: Option<f64> = None;
-    *cb.borrow_mut() = Some(Closure::new(move |t: f64| {
-        let t0 = now(&perf);
-        if let Some(p) = prev.replace(t) {
-            let dt = t - p;
-            // A hidden tab runs no frames; the gap is not a refresh interval.
-            if dt > 0.0 && dt <= GAP_MS {
-                let mut s = samples.borrow_mut();
-                if s.len() == REFRESH_SAMPLES {
-                    s.pop_front();
-                }
-                s.push_back(dt);
-            }
-        }
-        if let (Some(w), Some(f)) = (web_sys::window(), again.borrow().as_ref()) {
-            let _ = w.request_animation_frame(f.as_ref().unchecked_ref());
-        }
-        work.frames.set(work.frames.get() + 1);
-        work.refresh_ms.set(work.refresh_ms.get() + now(&perf) - t0);
-    }));
-    if let (Some(w), Some(f)) = (web_sys::window(), cb.borrow().as_ref()) {
-        let _ = w.request_animation_frame(f.as_ref().unchecked_ref());
-    }
-    std::mem::forget(cb);
-}
-
-/// The display's refresh period (ms) from recent main-thread frame intervals:
-/// the mean of those within [`REFRESH_INLIER`] of the median.
-fn refresh_period(samples: &VecDeque<f64>) -> Option<f64> {
-    if samples.len() < REFRESH_MIN_SAMPLES {
-        return None;
-    }
-    let mut sorted: Vec<f64> = samples.iter().copied().collect();
-    sorted.sort_by(|a, b| a.total_cmp(b));
-    let median = sorted[sorted.len() / 2];
-    let (sum, n) = sorted
-        .iter()
-        .filter(|d| (**d - median).abs() <= median * REFRESH_INLIER)
-        .fold((0.0, 0u32), |(s, n), d| (s + d, n + 1));
-    (n > 0).then_some(sum / f64::from(n))
-}
-
-/// A touch / `pointer: coarse` device (phones, tablets).
-fn coarse_pointer(window: &web_sys::Window) -> bool {
-    window
-        .match_media("(pointer: coarse)")
-        .ok()
-        .flatten()
-        .map(|m| m.matches())
-        .unwrap_or(false)
-}
-
-fn stored_bool(window: &web_sys::Window, key: &str) -> Option<bool> {
-    let ls = window.local_storage().ok().flatten()?;
-    match ls.get_item(key).ok().flatten()?.as_str() {
-        "1" => Some(true),
-        "0" => Some(false),
-        _ => None,
-    }
-}
-
-fn store_bool(window: &web_sys::Window, key: &str, val: bool) {
-    if let Ok(Some(ls)) = window.local_storage() {
-        let _ = ls.set_item(key, if val { "1" } else { "0" });
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use awsm_renderer_stats::LateStats;
 
-    #[test]
-    fn refresh_ignores_late_frames() {
-        let mut s: VecDeque<f64> = (0..40).map(|_| 8.333).collect();
-        s.push_back(16.7);
-        s.push_back(25.0);
-        let p = refresh_period(&s).unwrap();
-        assert!((p - 8.333).abs() < 1e-6);
-    }
-
-    #[test]
-    fn durations_read_the_same_everywhere() {
-        assert_eq!(duration(0.0084), "8.4 µs");
-        assert_eq!(duration(0.084), "84 µs");
-        assert_eq!(duration(0.61), "0.61 ms");
-        assert_eq!(duration(4.2), "4.20 ms");
-        assert_eq!(duration(12.34), "12.3 ms");
-    }
-
-    #[test]
-    fn scopes_group_by_kind_and_fold_the_small_ones() {
-        let scopes: Vec<(String, f64)> = [
-            ("Prep: Camera Upload", 0.038),
-            ("Prep: Bind Groups", 0.0004),
-            ("Prep: Frame Setup", 0.0003),
-            ("Geometry RenderPass", 0.034),
-            ("Submit: Finish + Queue Submit", 0.015),
-        ]
-        .into_iter()
-        .map(|(n, ms)| (n.to_string(), ms))
-        .collect();
-        let rows: Vec<(u8, String)> = scope_rows(0.1, &scopes)
-            .into_iter()
-            .map(|r| (r.indent, r.label))
-            .collect();
-        let labels: Vec<(u8, &str)> = rows.iter().map(|(i, l)| (*i, l.as_str())).collect();
-        assert_eq!(
-            labels,
-            [
-                (1, "prepare"),
-                (2, "Camera Upload"),
-                (2, "2 more under 1 µs"),
-                (1, "passes"),
-                (2, "Geometry RenderPass"),
-                (1, "submit"),
-                (2, "Finish + Queue Submit"),
-                (1, "outside the scopes"),
-            ]
-        );
-        assert!(scope_rows(0.1, &[]).is_empty());
-    }
-
-    #[test]
-    fn budget_reads_used_over_budget() {
-        assert_eq!(budget_share(7.2, 16.7), "7.2 / 16.7 ms (43%)");
-        assert_eq!(budget_share(0.01, 16.7), "<0.1 / 16.7 ms (<1%)");
-        assert_eq!(budget_share(0.0, 16.7), "0.0 / 16.7 ms (0%)");
-        let budget = 1000.0 / 60.0;
-        assert_eq!(
-            budget_headline(budget, Some(7.2)),
-            ("16.7 ms (60 Hz) · headroom 9.5 ms".to_string(), false)
-        );
-        assert_eq!(
-            budget_headline(budget, Some(17.9)),
-            ("16.7 ms (60 Hz) · over by 1.2 ms".to_string(), true)
-        );
-    }
-
-    #[test]
-    fn values_split_into_numbers_and_units() {
-        let split = |s| value_pieces(s);
-        assert_eq!(
-            split("16.7 ms (60 Hz) · headroom 9.6 ms"),
-            [
-                (true, "16.7"),
-                (false, " ms ("),
-                (true, "60"),
-                (false, " Hz) · headroom "),
-                (true, "9.6"),
-                (false, " ms"),
-            ]
-        );
-        assert_eq!(
-            split("<0.1 / 16.7 ms (<1%)"),
-            [
-                (true, "<0.1"),
-                (false, " / "),
-                (true, "16.7"),
-                (false, " ms ("),
-                (true, "<1%"),
-                (false, ")"),
-            ]
-        );
-        assert_eq!(
-            split("0 / s · 0 total"),
-            [
-                (true, "0"),
-                (false, " / s · "),
-                (true, "0"),
-                (false, " total")
-            ]
-        );
-        assert_eq!(
-            split("7.4 µs / frame"),
-            [(true, "7.4"), (false, " µs / frame")]
-        );
-        assert_eq!(
-            split("30 samples/s per robot"),
-            [(true, "30"), (false, " samples/s per robot")]
-        );
-        assert_eq!(split("n/a"), [(false, "n/a")]);
-        assert_eq!(split("—"), [(false, "—")]);
-        assert!(split("").is_empty());
-    }
-
-    #[test]
-    fn bars_warn_from_80_percent_and_turn_red_past_the_budget() {
-        let state = |share| bar_look(share).0;
-        assert_eq!(state(0.0), None);
-        assert_eq!(state(0.79), None);
-        assert_eq!(state(0.8), Some("stats-warn"));
-        assert_eq!(state(1.0), Some("stats-warn"));
-        assert_eq!(state(1.01), Some("stats-over"));
-        // The fill is the share, capped at a full bar.
-        assert_eq!(bar_look(0.5).1, 50.0);
-        assert_eq!(bar_look(1.0).1, 100.0);
-        assert_eq!(bar_look(2.5).1, 100.0);
-    }
-
-    #[test]
-    fn frame_window_reports_and_skips_pauses() {
-        let mut w = FrameWindow::new(false);
-        let mut t = 0.0;
-        assert!(w.frame(t, 1.0, false, None).is_none());
-        // A pause is neither a frame nor span.
-        t += 5000.0;
-        assert!(w.frame(t, 1.0, false, None).is_none());
-        let mut out = None;
-        for _ in 0..50 {
-            t += 20.0;
-            if let Some(m) = w.frame(t, 1.0, false, None) {
-                out = Some(m);
-            }
+    fn window() -> Window {
+        Window {
+            seconds: 1.0,
+            frames: 60,
+            span_ms: 1000.0,
+            late: LateStats::default(),
         }
-        let r = out.expect("a report");
-        assert_eq!(r.frames, 50);
-        assert!((r.span_ms - 1000.0).abs() < 1e-6);
-        // The renderer group is closed: no breakdown.
-        assert!(r.phases_ms.is_none() && r.cpu_scopes.is_empty());
+    }
+
+    #[test]
+    fn the_sim_joins_the_budget_once_counting() {
+        let mut sim = SimStats::default();
+        let report = SimReport {
+            span_ms: 1000.0,
+            steps: 500,
+            busy_ms: 120.0,
+            split: Some(([100.0, 20.0], 500)),
+        };
+        // Before the first window (warm-up): left out.
+        sim.sim_report(&report);
+        assert_eq!(sim.section(&window()).headline, "—");
+        sim.sim_report(&report);
+        let group = sim.section(&window());
+        assert_eq!(group.headline, "0.24 ms / step");
+        assert_eq!(group.rows[0].value, "500 steps/s");
+        assert_eq!(group.rows[2].label, "simulate (mj_step)");
+        assert_eq!(group.rows[2].value, "0.20 ms / step");
+        // 120 ms per second over 60 frames: 2 ms per frame drawn.
+        assert!((group.budget_ms.unwrap() - 2.0).abs() < 1e-9);
     }
 }

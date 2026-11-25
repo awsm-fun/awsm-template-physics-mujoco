@@ -20,21 +20,32 @@
 //!    `protocol`, "Timing"). Main relays resizes, and owns the orbit camera:
 //!    pointer events update it, and once per main-thread frame in which it
 //!    changed, its state goes to the render worker (see [`CameraMsg`]).
+//!
+//! Settings (bottom right: the render resolution and the anti-aliasing) and
+//! the Stats panel are awsm-renderer-kit's panels: `SettingsPanel` and
+//! `StatsPanel` here, the kit's messages to and from the render worker (see
+//! [`WorkerLink`] and `crate::stats`).
 
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 
 use dominator::{clone, html};
-use futures_signals::signal::{Mutable, SignalExt};
+use futures_signals::signal::Mutable;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
 use web_sys::js_sys;
 use web_sys::{HtmlCanvasElement, MessageEvent, Worker, WorkerOptions, WorkerType};
 
+use awsm_renderer_settings::{
+    probe_gpu, AaMode, SettingsConfig, SettingsHooks, SettingsOptions, SettingsPanel,
+    SettingsStore, SettingsToWorker, SettingsUi,
+};
+use awsm_renderer_stats::{StatsCollector, StatsHooks, StatsPanel, StatsToPage, StatsToWorker};
+
 use crate::about::{About, Tab};
 use crate::bootstrap::spawn_shared_worker_transfer;
-use crate::protocol::{CameraMsg, Layout, OrbitState, ProfileMsg, RenderMsg, Scene};
-use crate::stats::{SimReport, Stats};
+use crate::protocol::{CameraMsg, Layout, OrbitState, RenderMsg, Scene};
+use crate::stats as app_stats;
 
 /// Every `localStorage` key this app writes starts with this (the CDN origin is
 /// shared with other experiments).
@@ -48,10 +59,12 @@ pub fn start() -> Result<(), JsValue> {
         .child(html!("canvas" => HtmlCanvasElement, {
             .class("canvas")
             .after_inserted(clone!(status => move |canvas| {
-                if let Err(e) = setup(canvas, status.clone()) {
-                    status.set(format!("setup error: {e:?}"));
-                    tracing::error!("main thread setup: {e:?}");
-                }
+                wasm_bindgen_futures::spawn_local(async move {
+                    if let Err(e) = setup(canvas, status.clone()).await {
+                        status.set(format!("setup error: {e:?}"));
+                        tracing::error!("main thread setup: {e:?}");
+                    }
+                });
             }))
         }))
         .child(html!("div", {
@@ -67,29 +80,113 @@ pub fn start() -> Result<(), JsValue> {
     Ok(())
 }
 
-fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsValue> {
+/// This app's Settings: every anti-aliasing mode, TAA by default on a desktop
+/// and Off on a touch device or a software GPU, and the shared resolution
+/// policy (awsm-renderer-settings).
+fn settings_config() -> SettingsConfig {
+    SettingsConfig::default()
+}
+
+/// The Settings modal's words and look: this template's close button and
+/// hint.
+fn settings_ui() -> SettingsUi {
+    SettingsUi {
+        close_class: "settings-close".into(),
+        hint: Some("Lower the resolution if your framerate is low.".into()),
+        ..SettingsUi::default()
+    }
+}
+
+async fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsValue> {
     let window = web_sys::window().ok_or_else(|| JsValue::from_str("no window"))?;
+    let document = window
+        .document()
+        .ok_or_else(|| JsValue::from_str("no document"))?;
+    let body = dominator::body();
     // Take keyboard focus (the modals close on Escape). The page is
     // usually embedded in an iframe on awsm.fun; a click on the canvas focuses
     // it too, since no pointer handler here cancels the press.
     let _ = window.focus();
-    maybe_reset_settings(&window);
+    // `?reset` forgets the stored settings (the resolution, the
+    // anti-aliasing, the Stats panel and its groups), so the page boots with
+    // the defaults. Before anything reads one.
+    let store = SettingsStore::new(STORAGE_PREFIX);
+    if store.reset_if_asked() {
+        loading_log("?reset — stored settings cleared, booting with defaults");
+    }
+    // The kit's messages to the render worker; held until it listens. And
+    // the MuJoCo worker's profiling switch, which follows the sim group.
+    let link = Rc::new(WorkerLink::default());
+    let sim_profile = Rc::new(SimProfile::default());
 
-    // The Stats chip + panel (see `crate::stats`), fed by both workers. Its
-    // `what do these mean?` opens About on the Stats tab. Mounted between the
-    // Stats and Settings buttons so the Tab order runs left to right.
+    // The Stats chip + panel (awsm-renderer-stats), fed by the render worker
+    // (the sim's numbers reach it through main). Its `what do these mean?`
+    // opens About on the Stats tab. Mounted between the Stats and Settings
+    // buttons so the Tab order runs left to right.
     let about = About::new();
-    let stats = Stats::install(
-        &window,
+    let stats_panel: web_sys::HtmlElement = document.create_element("div")?.unchecked_into();
+    stats_panel.set_class_name("stats");
+    let stats_button: web_sys::HtmlElement = document.create_element("button")?.unchecked_into();
+    stats_button.set_class_name("stats-btn");
+    stats_button.set_attribute("type", "button")?;
+    stats_button.set_text_content(Some("Stats"));
+    body.append_child(&stats_panel)?;
+    body.append_child(&stats_button)?;
+    let stats = StatsPanel::mount(
         STORAGE_PREFIX,
-        clone!(about => move || about.open(Tab::Stats)),
+        &stats_panel,
+        Some(&stats_button),
+        StatsHooks {
+            post: Box::new(clone!(link, sim_profile => move |message| {
+                if let StatsToWorker::StatsView { shown, open } = message {
+                    sim_profile.set(*shown && open.iter().any(|id| id == app_stats::SIM));
+                }
+                link.post_stats(message);
+            })),
+            on_help: Some(Box::new(clone!(about => move || about.open(Tab::Stats)))),
+            page_part: app_stats::PAGE_PART.to_string(),
+            app_sections: None,
+            section_rows: None,
+            shown: None,
+        },
     );
+    // "starting…" in every group until the render worker reports.
+    stats.handle(&StatsToPage::Stats(
+        StatsCollector::new(app_stats::config()).placeholder(),
+    ));
     about.install();
 
+    // The Settings button (bottom right) and its modal (awsm-renderer-settings).
+    let settings_button = document.create_element("button")?;
+    settings_button.set_class_name("settings-btn");
+    settings_button.set_attribute("type", "button")?;
+    settings_button.set_text_content(Some("Settings"));
+    body.append_child(&settings_button)?;
+    let settings_root = document.create_element("div")?;
+    body.append_child(&settings_root)?;
+    // A software GPU starts at a lower resolution and without anti-aliasing,
+    // so the adapter is asked first (a separate, lightweight request).
+    let gpu = probe_gpu().await;
+    tracing::info!(
+        "gpu: fallback adapter {}, largest 2D texture {}",
+        gpu.is_fallback,
+        gpu.max_texture_dim
+    );
+    let settings = SettingsPanel::new(
+        &settings_root,
+        &canvas,
+        store,
+        &SettingsOptions::new(&settings_config(), Some(gpu)),
+        settings_ui(),
+        loading_log,
+    );
+
     // Backing store at the chosen render resolution (a stored Settings choice,
-    // else native capped at a pixel budget — see `resolution`). Must be sized
-    // BEFORE the transfer.
-    let resolution = crate::resolution::Resolution::new(&window, &canvas, "awsm_mujoco_res_scale");
+    // else native capped at a pixel budget). Must be sized BEFORE the
+    // transfer.
+    let (width, height) = settings.backing();
+    canvas.set_width(width);
+    canvas.set_height(height);
     let offscreen = canvas.transfer_control_to_offscreen()?;
 
     let base = page_base(&window);
@@ -100,6 +197,8 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     set(&payload, "canvas", &offscreen);
     set(&payload, "origin", &JsValue::from_str(&base));
     set(&payload, "app_base", &JsValue::from_str(&app_base));
+    // The renderer is built with the chosen mode.
+    set(&payload, "aa", &JsValue::from_str(settings.aa().id()));
     // Debug overlays are opt-in via the page URL, and only the main thread can
     // read it — the render worker's own base is a `blob:`.
     let search = window.location().search().unwrap_or_default();
@@ -135,15 +234,21 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     let mujoco_ref: Rc<RefCell<Option<Worker>>> = Rc::new(RefCell::new(None));
 
     let on_render_msg = Closure::<dyn FnMut(MessageEvent)>::new(clone!(
-        status, model_msg, scene_ready, render_ref, mujoco_ref, stats => move |e: MessageEvent| {
-            match serde_wasm_bindgen::from_value::<RenderMsg>(e.data()) {
+        status, model_msg, scene_ready, render_ref, mujoco_ref, stats, settings, link => move |e: MessageEvent| {
+            let data = e.data();
+            // The kit's messages first: the compile overlay, the Stats report.
+            if settings.handle_js(&data) || stats.handle_js(&data) {
+                return;
+            }
+            match serde_wasm_bindgen::from_value::<RenderMsg>(data) {
                 Ok(RenderMsg::Progress { message }) => loading_log(&message),
                 Ok(RenderMsg::SceneReady) => {
                     scene_ready.set(true);
-                    // The worker listens from now on: tell it which Stats
-                    // groups are expanded (later changes follow, below).
+                    // The worker listens from now on: send it what the panels
+                    // said meanwhile (which Stats groups are open, the
+                    // canvas size, a Settings change).
                     if let Some(render) = render_ref.borrow().as_ref() {
-                        post_profile(render, &stats);
+                        link.listening(render.clone());
                     }
                     loading_log("scene ready — waiting on the MuJoCo model…");
                     maybe_start(&model_msg, &scene_ready, &render_ref, &mujoco_ref);
@@ -151,10 +256,8 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
                 Ok(RenderMsg::Ready) => {
                     loading_log("first frames rendered — ready");
                     loading_done();
-                    stats.mark_ready();
                     status.set("running — drag orbits, wheel zooms".into());
                 }
-                Ok(RenderMsg::Stats(report)) => stats.window(report),
                 Ok(RenderMsg::Error { message }) => {
                     loading_log(&format!("ERROR: {message}"));
                     status.set(format!("render error: {message}"));
@@ -173,14 +276,6 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     )?;
     on_render_msg.forget();
     *render_ref.borrow_mut() = Some(render.clone());
-    wasm_bindgen_futures::spawn_local(stats.profile_signal().for_each(
-        clone!(render, scene_ready, stats => move |_| {
-            if scene_ready.get() {
-                post_profile(&render, &stats);
-            }
-            async {}
-        }),
-    ));
 
     // ── MuJoCo worker (plain JS module worker — its own wasm module) ────────
     loading_log("spawning MuJoCo worker…");
@@ -189,7 +284,7 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     let ab = app_base.trim_end_matches('/');
     let mujoco = Worker::new_with_options(&format!("{ab}/workers/mujoco-worker.js"), &opts)?;
     let on_mujoco_msg = Closure::<dyn FnMut(MessageEvent)>::new(clone!(
-        status, model_msg, scene_ready, render_ref, mujoco_ref, stats => move |e: MessageEvent| {
+        status, model_msg, scene_ready, render_ref, mujoco_ref, link => move |e: MessageEvent| {
             let data = e.data();
             let kind = js_sys::Reflect::get(&data, &JsValue::from_str("kind"))
                 .ok()
@@ -218,7 +313,12 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
                     loading_log(&format!("MUJOCO ERROR: {m}"));
                     status.set(format!("mujoco error: {m}"));
                 }
-                "stats" => stats.sim_window(sim_report(&data)),
+                // The sim's numbers go to the render worker, which puts the
+                // sim group (and its lane of the frame budget) in its report.
+                "stats" => {
+                    set(&data.clone().unchecked_into::<js_sys::Object>(), "kind", &JsValue::from_str("sim-stats"));
+                    link.post_raw(&data);
+                }
                 _ => {}
             }
         }
@@ -249,72 +349,129 @@ fn setup(canvas: HtmlCanvasElement, status: Mutable<String>) -> Result<(), JsVal
     );
     mujoco.post_message(&init)?;
     // The sim group's breakdown is measured only while it is expanded.
-    wasm_bindgen_futures::spawn_local(stats.sim_profile_signal().for_each(
-        clone!(mujoco => move |on| {
-            let msg = js_sys::Object::new();
-            set(&msg, "kind", &JsValue::from_str("profile"));
-            set(&msg, "on", &JsValue::from_bool(on));
-            let _ = mujoco.post_message(&msg);
-            async {}
-        }),
-    ));
+    sim_profile.attach(mujoco.clone());
     *mujoco_ref.borrow_mut() = Some(mujoco);
 
-    // Layout changes → ResizeMsg, plus the Settings modal (resolution slider).
-    resolution.install(&window, &canvas, render.clone())?;
+    // Layout changes and the Settings modal → `resize` / `anti-alias`.
+    settings.start(
+        &canvas,
+        SettingsHooks {
+            on_resize: Box::new(clone!(link => move |width, height| {
+                link.post_settings(SettingsToWorker::Resize { width, height });
+            })),
+            on_anti_alias: Box::new(clone!(link => move |mode| {
+                link.post_settings(SettingsToWorker::AntiAlias { mode });
+            })),
+            open_button: Some(settings_button),
+            extra_rows: Vec::new(),
+        },
+    );
     install_pointer(&window, &canvas, render, stats)?;
 
     status.set("loading scene…".into());
     Ok(())
 }
 
-/// Tell the render worker which Stats groups are expanded.
-fn post_profile(render: &Worker, stats: &Stats) {
-    if let Ok(v) = serde_wasm_bindgen::to_value(&ProfileMsg::Set(stats.profile())) {
-        let _ = render.post_message(&v);
+/// The kit's messages from the panels to the render worker. The worker
+/// listens only once its scene is loaded (`SceneReady`); until then the
+/// latest of each kind waits here (the panel's last `stats-view`, the latest
+/// canvas size, a Settings change), and the page's once-a-second samples are
+/// dropped.
+#[derive(Default)]
+struct WorkerLink {
+    worker: RefCell<Option<Worker>>,
+    view: RefCell<Option<StatsToWorker>>,
+    size: Cell<Option<(u32, u32)>>,
+    aa: Cell<Option<AaMode>>,
+}
+
+impl WorkerLink {
+    fn post_settings(&self, message: SettingsToWorker) {
+        if let Some(worker) = self.worker.borrow().as_ref() {
+            post_kit(worker, message.to_js());
+            return;
+        }
+        match message {
+            SettingsToWorker::Resize { width, height } => self.size.set(Some((width, height))),
+            SettingsToWorker::AntiAlias { mode } => self.aa.set(Some(mode)),
+        }
+    }
+
+    fn post_stats(&self, message: &StatsToWorker) {
+        if let Some(worker) = self.worker.borrow().as_ref() {
+            post_kit(worker, message.to_js());
+        } else if matches!(message, StatsToWorker::StatsView { .. }) {
+            *self.view.borrow_mut() = Some(message.clone());
+        }
+    }
+
+    /// Any other message for the render worker, once it listens.
+    fn post_raw(&self, message: &JsValue) {
+        if let Some(worker) = self.worker.borrow().as_ref() {
+            let _ = worker.post_message(message);
+        }
+    }
+
+    /// The render worker listens from now on: send what waited.
+    fn listening(&self, worker: Worker) {
+        *self.worker.borrow_mut() = Some(worker);
+        let view = self.view.borrow_mut().take();
+        if let Some(view) = view {
+            self.post_stats(&view);
+        }
+        if let Some((width, height)) = self.size.take() {
+            self.post_settings(SettingsToWorker::Resize { width, height });
+        }
+        if let Some(mode) = self.aa.take() {
+            self.post_settings(SettingsToWorker::AntiAlias { mode });
+        }
     }
 }
 
-/// The MuJoCo worker's `{kind: "stats"}` message.
-fn sim_report(data: &JsValue) -> SimReport {
-    let num = |k: &str| {
-        js_sys::Reflect::get(data, &JsValue::from_str(k))
-            .ok()
-            .and_then(|v| v.as_f64())
-    };
-    SimReport {
-        span_ms: num("span_ms").unwrap_or(0.0),
-        steps: num("steps").unwrap_or(0.0) as u32,
-        busy_ms: num("busy_ms").unwrap_or(0.0),
-        split: match (num("step_ms"), num("publish_ms"), num("split_steps")) {
-            (Some(step), Some(publish), Some(n)) => Some(([step, publish], n as u32)),
-            _ => None,
-        },
+fn post_kit(worker: &Worker, message: Result<JsValue, String>) {
+    match message {
+        Ok(value) => {
+            let _ = worker.post_message(&value);
+        }
+        Err(err) => tracing::error!("kit message: {err}"),
     }
 }
 
-/// `?reset` in the URL forgets every stored setting of this app (the panel,
-/// its groups, the render resolution), so the page boots with the defaults.
-/// Runs before anything reads one.
-fn maybe_reset_settings(window: &web_sys::Window) {
-    let search = window.location().search().unwrap_or_default();
-    let reset = web_sys::UrlSearchParams::new_with_str(&search)
-        .map(|p| p.has("reset"))
-        .unwrap_or(false);
-    let Some(ls) = reset
-        .then(|| window.local_storage().ok().flatten())
-        .flatten()
-    else {
-        return;
-    };
-    let keys: Vec<String> = (0..ls.length().unwrap_or(0))
-        .filter_map(|i| ls.key(i).ok().flatten())
-        .filter(|k| k.starts_with(STORAGE_PREFIX))
-        .collect();
-    for key in keys {
-        let _ = ls.remove_item(&key);
+/// `{kind: "profile", on}` to the MuJoCo worker: whether the sim group is
+/// expanded on a shown panel (it splits its time into stepping and
+/// publishing only then). Sent on every change, and once when the worker
+/// starts.
+#[derive(Default)]
+struct SimProfile {
+    worker: RefCell<Option<Worker>>,
+    on: Cell<bool>,
+    sent: Cell<Option<bool>>,
+}
+
+impl SimProfile {
+    fn set(&self, on: bool) {
+        self.on.set(on);
+        self.send();
     }
-    loading_log("?reset — stored settings cleared, booting with defaults");
+
+    fn attach(&self, worker: Worker) {
+        *self.worker.borrow_mut() = Some(worker);
+        self.send();
+    }
+
+    fn send(&self) {
+        let on = self.on.get();
+        let Some(worker) = self.worker.borrow().clone() else {
+            return;
+        };
+        if self.sent.replace(Some(on)) == Some(on) {
+            return;
+        }
+        let msg = js_sys::Object::new();
+        set(&msg, "kind", &JsValue::from_str("profile"));
+        set(&msg, "on", &JsValue::from_bool(on));
+        let _ = worker.post_message(&msg);
+    }
 }
 
 /// Step-4 rendezvous: once the model description AND `SceneReady` are both in,
@@ -378,7 +535,7 @@ fn install_pointer(
     window: &web_sys::Window,
     canvas: &HtmlCanvasElement,
     render: Worker,
-    stats: Rc<Stats>,
+    stats: StatsPanel,
 ) -> Result<(), JsValue> {
     let camera = Rc::new(Cell::new(OrbitState::START));
     let dragging = Rc::new(Cell::new(false));
@@ -432,13 +589,15 @@ fn install_pointer(
     // Once per main-thread frame (after that frame's input events), post the
     // state if it changed.
     type Cb = Rc<RefCell<Option<Closure<dyn FnMut(f64)>>>>;
-    let time_origin = window.performance().map(|p| p.time_origin()).unwrap_or(0.0);
+    let performance = window.performance();
+    let time_origin = performance.as_ref().map_or(0.0, |p| p.time_origin());
     let cb: Cb = Rc::new(RefCell::new(None));
     let again = cb.clone();
     let mut sent: Option<OrbitState> = None;
     *cb.borrow_mut() = Some(Closure::new(move |t: f64| {
         // This is the page's per-frame work (the Stats panel's page group).
-        stats.time_camera(|| {
+        let t0 = performance.as_ref().map_or(0.0, |p| p.now());
+        {
             let state = camera.get();
             if sent != Some(state) {
                 sent = Some(state);
@@ -450,7 +609,9 @@ fn install_pointer(
                     let _ = render.post_message(&v);
                 }
             }
-        });
+        }
+        let t1 = performance.as_ref().map_or(0.0, |p| p.now());
+        stats.page_frame(t1 - t0, None, true);
         if let (Some(w), Some(f)) = (web_sys::window(), again.borrow().as_ref()) {
             let _ = w.request_animation_frame(f.as_ref().unchecked_ref());
         }

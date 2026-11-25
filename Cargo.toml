@@ -38,6 +38,18 @@ publish = false
 awsm-renderer = "0.46.0"
 awsm-renderer-scene = "0.46.0"
 awsm-renderer-scene-loader = { version = "0.46.0", features = ["http"] }
+
+# ── Settings and stats, shared by every awsm-renderer app ───────────────────
+#   awsm-renderer-settings  the anti-aliasing modes (with TAA), the resolution
+#                           policy, applying a mode to the renderer, and the
+#                           web-sys Settings panel
+#   awsm-renderer-stats     the stats panel's numbers (frame windows,
+#                           smoothing, renderer CPU and GPU timings, the
+#                           report) and the web-sys panel that shows them
+# One crate is both the page and the render worker here, so it enables both
+# sides' features.
+awsm-renderer-settings = { git = "https://github.com/awsm-fun/awsm-renderer-kit", tag = "v0.1.1", features = ["renderer", "scene", "web", "ui"] }
+awsm-renderer-stats = { git = "https://github.com/awsm-fun/awsm-renderer-kit", tag = "v0.1.1", features = ["renderer", "web", "ui"] }
 awsm-renderer-meshgen = "0.46.0"
 
 # ── DOM, driven from pure Rust ──────────────────────────────────────────────
